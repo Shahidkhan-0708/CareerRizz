@@ -75,6 +75,12 @@ const cleanup = async () => {
 };
 
 const run = async () => {
+  // Check backend reachability first — skip gracefully if not running.
+  try {
+    const res = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) { console.log('\n⏭️  Backend not healthy — skipping PDF pipeline E2E tests'); process.exit(0); }
+  } catch { console.log('\n⏭️  Backend not running — skipping PDF pipeline E2E tests'); process.exit(0); }
+
   console.log('\n============== E2E — 5-RECIPIENT PDF PIPELINE ==============\n');
 
   // ---- STAGE 1: Import the PDF -------------------------------------------

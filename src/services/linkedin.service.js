@@ -196,28 +196,40 @@ export async function scrapeLinkedInPosts(linkedinUrl, maxPosts = 5) {
 export async function searchLinkedInBySchool(school, { maxResults = 10, location } = {}) {
   if (!hasToken() || !school) return [];
 
-  // Convert school name to LinkedIn-style slug:
-  // lowercase, hyphens for spaces, strip special chars.
-  // e.g. "Madanapalle Institute of Technology & Science" →
-  //      "madanapalle-institute-of-technology-science"
-  const slug = school
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')  // drop & ., etc.
-    .replace(/\s+/g, '-')          // spaces → hyphens
-    .replace(/-+/g, '-')           // collapse double hyphens
-    .replace(/^-|-$/g, '');        // trim leading/trailing
+  // Normalize common country/region abbreviations for LinkedIn search
+  let normalizedLocation = location ? location.trim() : undefined;
+  if (normalizedLocation) {
+    const locUpper = normalizedLocation.toUpperCase();
+    const locMap = {
+      'US': 'United States',
+      'USA': 'United States',
+      'UK': 'United Kingdom',
+      'IN': 'India',
+      'IND': 'India',
+      'CA': 'Canada',
+      'AU': 'Australia',
+      'DE': 'Germany',
+      'FR': 'France',
+      'SG': 'Singapore',
+      'UAE': 'United Arab Emirates',
+    };
+    if (locMap[locUpper]) {
+      normalizedLocation = locMap[locUpper];
+    }
+  }
 
-  // Use the fuzzy-search actor (linkedin-profile-search) which accepts
-  // searchQuery + schoolUrls. The field is `searchQuery`, NOT `query`.
+  // Use the fuzzy-search actor (linkedin-profile-search).
+  // Passing searchQuery with school name is robust across all institutions
+  // without relying on exact LinkedIn URL slugs.
   const input = {
-    searchQuery: school,              // free-text search to match the school
-    profileScraperMode: 'Short',     // cheap: search pages only
-    schoolUrls: [slug],              // LinkedIn school slug
+    searchQuery: school.trim(),
+    profileScraperMode: 'Short',     // search pages only
     maxItems: Math.min(maxResults, 50),
     takePages: Math.ceil(Math.min(maxResults, 50) / 25),
   };
-  if (location) {
-    input.locations = [location];
+
+  if (normalizedLocation) {
+    input.locations = [normalizedLocation];
   }
 
   const items = await runActorSync(ACTOR_SEARCH_FUZZY, input, 120);

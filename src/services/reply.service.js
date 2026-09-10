@@ -32,88 +32,153 @@ export async function processIncomingReplies() {
       continue;
     }
 
-    // 2. Primary matching: Thread ID
     let outreachRecord = null;
+
+    // 2. Primary matching: Thread ID (if previously recorded)
     if (reply.threadId) {
       outreachRecord = await findOutreachByGmailThreadId(reply.threadId);
+      if (outreachRecord) {
+        logger.info(`Matched reply via thread ID ${reply.threadId} to outreach ${outreachRecord.id}`);
+      }
     }
 
-    // 2b. Fallback: In-Reply-To header matches a stored provider_message_id.
-    //     This is the critical path for SMTP-sent emails: Brevo assigns a
-    //     Message-ID, the recipient's reply sets In-Reply-To to that ID, and
-    //     we match it against the outreach record we saved at send time.
-    if (!outreachRecord && reply.inReplyTo) {
-      const supabase = getSupabaseClient();
-      const { data: records } = await supabase
-        .from('outreach')
-        .select('*, contacts(*)')
-        .eq('provider_message_id', reply.inReplyTo)
-        .limit(1);
-      if (records && records.length > 0) {
-        outreachRecord = records[0];
-        logger.info(`Matched reply via In-Reply-To ${reply.inReplyTo} to outreach ${outreachRecord.id}`);
+    // 2b. Message-ID matching: In-Reply-To and References headers
+    // Handles angle bracket formatting differences: <id@domain> vs id@domain
+    if (!outreachRecord && (reply.inReplyTo || reply.references)) {
+      const candidateIds = new Set();
+      const rawHeader = `${reply.inReplyTo || ''} ${reply.references || ''}`;
+      
+      const angleMatches = rawHeader.match(/<[^>]+>/g) || [];
+      for (const m of angleMatches) {
+        candidateIds.add(m.trim());
+        candidateIds.add(m.replace(/^<|>$/g, '').trim());
+      }
+
+      const plainTokens = rawHeader.split(/\s+/).filter(t => t.includes('@'));
+      for (const t of plainTokens) {
+        const clean = t.replace(/^<|>$/g, '').trim();
+        if (clean) {
+          candidateIds.add(clean);
+          candidateIds.add(`<${clean}>`);
+        }
+      }
+
+      if (candidateIds.size > 0) {
+        const supabase = getSupabaseClient();
+        const { data: records, error } = await supabase
+          .from('outreach')
+          .select('*, contacts(*)')
+          .in('provider_message_id', Array.from(candidateIds))
+          .limit(1);
+
+        if (!error && records && records.length > 0) {
+          outreachRecord = records[0];
+          logger.info(`Matched reply via In-Reply-To/References to outreach ${outreachRecord.id}`);
+        }
       }
     }
 
     // 3. Fallback matching: Sender Email
     if (!outreachRecord && reply.fromEmail) {
-      const contact = await findContactByEmail(reply.fromEmail);
-      if (contact) {
+      try {
+        const contact = await findContactByEmail(reply.fromEmail);
+        if (contact) {
+          const supabase = getSupabaseClient();
+          const { data: records, error } = await supabase
+            .from('outreach')
+            .select('*, contacts(*)')
+            .eq('contact_id', contact.id)
+            .order('created_at', { ascending: false })
+            .limit(1);
+          
+          if (!error && records && records.length > 0) {
+            outreachRecord = records[0];
+            logger.info(`Matched reply via sender email ${reply.fromEmail} to outreach ${outreachRecord.id}`);
+          }
+        }
+      } catch (err) {
+        logger.warn(`Error matching contact by email ${reply.fromEmail}:`, { error: err.message });
+      }
+    }
+
+    // 4. Fallback matching: Subject Line (strip Re:, Fwd:, etc.)
+    if (!outreachRecord && reply.subject) {
+      const cleanedSubject = reply.subject
+        .replace(/^(re|fwd|fw|\s*\[.*?\])\s*:\s*/gi, '')
+        .replace(/^(re|fwd|fw|\s*\[.*?\])\s*:\s*/gi, '')
+        .trim();
+
+      if (cleanedSubject && cleanedSubject.length >= 6) {
         const supabase = getSupabaseClient();
-        const { data: records } = await supabase
+        const { data: records, error } = await supabase
           .from('outreach')
           .select('*, contacts(*)')
-          .eq('contact_id', contact.id)
-          .order('created_at', { ascending: false })
+          .ilike('subject', `%${cleanedSubject}%`)
+          .order('sent_at', { ascending: false })
           .limit(1);
-        
-        if (records && records.length > 0) {
+
+        if (!error && records && records.length > 0) {
           outreachRecord = records[0];
+          logger.info(`Matched reply via Subject "${cleanedSubject}" to outreach ${outreachRecord.id}`);
         }
       }
     }
 
+    // If still no matching outreach record, skip without permanently blacklisting in processed_gmail_messages
     if (!outreachRecord) {
-      logger.debug(`No matching outreach record found for reply from ${reply.fromEmail}. Skipping.`);
+      logger.debug(`No matching outreach record found for reply from ${reply.fromEmail} (Subject: ${reply.subject}). Skipping.`);
+      skippedCount++;
+      continue;
+    }
+
+    // Guard: If already marked Replied, mark this message processed and continue
+    if (outreachRecord.status === 'Replied' && outreachRecord.reply_body) {
+      logger.info(`Outreach record ${outreachRecord.id} is already marked Replied. Marking message ${reply.id} processed.`);
       await markGmailMessageProcessed(reply.id);
       skippedCount++;
       continue;
     }
 
-    // Guard: Skip if already marked Replied
-    if (outreachRecord.status === 'Replied') {
-      logger.info(`Record ${outreachRecord.id} is already marked Replied. Marking message ${reply.id} processed.`);
+    try {
+      logger.info(`Matching reply detected for contact ${outreachRecord.contacts?.name || reply.fromEmail}. Classifying reply...`);
+
+      // 5. AI Reply Classification
+      const classification = await classifyReply(reply.body || reply.subject || 'Empty message body');
+
+      // Sanitize suggested followup date so it's strictly a valid YYYY-MM-DD or null
+      let safeFollowUpDate = null;
+      if (classification?.suggestedFollowUpDate && typeof classification.suggestedFollowUpDate === 'string') {
+        const match = classification.suggestedFollowUpDate.match(/\b\d{4}-\d{2}-\d{2}\b/);
+        if (match) {
+          safeFollowUpDate = match[0];
+        }
+      }
+
+      // 6. Update Outreach State
+      const now = new Date().toISOString();
+      await updateOutreachRecord(outreachRecord.id, {
+        status: 'Replied',
+        reply_body: reply.body || '(No text body in reply)',
+        reply_received_at: reply.receivedAt || now,
+        gmail_message_id: reply.id,
+        gmail_thread_id: reply.threadId,
+        last_inbound_at: now,
+        ai_category: classification?.category || 'OTHER',
+        ai_confidence: classification?.confidence || 0.8,
+        ai_sentiment: classification?.sentiment || 'neutral',
+        ai_summary: classification?.summary || 'Inbound reply received',
+        ai_next_action: classification?.nextAction || 'Review reply manually',
+        ai_suggested_followup_date: safeFollowUpDate,
+        ai_requires_human_review: classification?.requiresHumanReview ?? true,
+      });
+
       await markGmailMessageProcessed(reply.id);
+      processedCount++;
+      logger.info(`Successfully processed reply for ${reply.fromEmail}. AI Category: ${classification?.category}`);
+    } catch (replyErr) {
+      logger.error(`Failed to process reply message ${reply.id}:`, { error: replyErr.message });
       skippedCount++;
-      continue;
     }
-
-    logger.info(`Matching reply detected for contact ${outreachRecord.contacts?.name || reply.fromEmail}. Classifying reply...`);
-
-    // 4. AI Reply Classification
-    const classification = await classifyReply(reply.body);
-
-    // 5. Update Outreach State
-    const now = new Date().toISOString();
-    await updateOutreachRecord(outreachRecord.id, {
-      status: 'Replied',
-      reply_body: reply.body,
-      reply_received_at: reply.receivedAt || now,
-      gmail_message_id: reply.id,
-      gmail_thread_id: reply.threadId,
-      last_inbound_at: now,
-      ai_category: classification.category,
-      ai_confidence: classification.confidence,
-      ai_sentiment: classification.sentiment,
-      ai_summary: classification.summary,
-      ai_next_action: classification.nextAction,
-      ai_suggested_followup_date: classification.suggestedFollowUpDate,
-      ai_requires_human_review: classification.requiresHumanReview,
-    });
-
-    await markGmailMessageProcessed(reply.id);
-    processedCount++;
-    logger.info(`Successfully processed reply for ${reply.fromEmail}. AI Category: ${classification.category}`);
   }
 
   logger.info(`Reply detection job complete. Processed: ${processedCount}, Skipped: ${skippedCount}`);

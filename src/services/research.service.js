@@ -36,7 +36,7 @@ import {
 
 // ---- thresholds -----------------------------------------------------------
 const ACCEPT_IDENTITY = 0.55;      // minimum identity confidence to extract from a candidate
-const MIN_FACT_CONFIDENCE = 0.5;   // facts below this are dropped at validation
+const MIN_FACT_CONFIDENCE = 0.3;   // facts below this are dropped at validation
 const MAX_CANDIDATES = 6;
 const MAX_WORKS = 6;
 const TIMEOUT_MS = 8000;

@@ -29,13 +29,32 @@ import {
   triggerOutreach,
   triggerFollowups,
   triggerReplies,
+  triggerRepliesReset,
   addLead,
   approveAndSendBulk,
 } from './api';
+import {
+  fallbackStats,
+  fallbackHealth,
+  fallbackCampaigns,
+  fallbackContacts,
+  fallbackOutreach,
+  fallbackReplies,
+  fallbackProfiles,
+  fallbackImportJobs,
+  fallbackReviewQueue,
+  fallbackBulkProgress,
+} from './fallback-data';
 
 interface AppContextType {
   loading: boolean;
   error: string | null;
+  /** True when the backend is unreachable and the UI is using fallback data. */
+  degradedMode: boolean;
+  /** Human-readable names of endpoints that failed on the last refresh. */
+  failedEndpoints: string[];
+  /** How many automatic retries have been attempted (resets when healthy). */
+  retryCount: number;
   // data
   stats: DashboardStats | null;
   health: Record<string, IntegrationHealth> | null;
@@ -61,6 +80,7 @@ interface AppContextType {
   runOutreach: () => Promise<{ claimed: number; sent: number; failed: number } | null>;
   runFollowups: () => Promise<unknown>;
   runReplies: () => Promise<{ fetched: number; processed: number; skipped: number }>;
+  runRepliesReset: () => Promise<{ fetched: number; processed: number; skipped: number }>;
   createLead: (data: { name: string; email: string; organization?: string; role?: string }) => Promise<void>;
   bulkApproveAndSend: () => Promise<void>;
 }
@@ -70,6 +90,10 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [degradedMode, setDegradedMode] = useState(false);
+  const [failedEndpoints, setFailedEndpoints] = useState<string[]>([]);
+  const [retryCount, setRetryCount] = useState(0);
+  const retryCountRef = React.useRef(0);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [health, setHealth] = useState<Record<string, IntegrationHealth> | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -99,40 +123,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           getBulkProgress(),
         ]);
 
-      const ok = <T,>(r: PromiseSettledResult<T>): T | null =>
-        r.status === 'fulfilled' ? r.value : null;
+      const ok = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
+        r.status === 'fulfilled' ? r.value : fallback;
 
-      const s = ok(statsR);
-      const h = ok(healthR);
-      const c = ok(campsR);
-      const co = ok(contactsR);
-      const o = ok(outreachR);
-      const r = ok(repliesR);
-      const p = ok(profilesR);
-      const j = ok(jobsR);
-      const q = ok(reviewR);
-      const bp = ok(bulkR);
+      const s = ok(statsR, fallbackStats);
+      const h = ok(healthR, fallbackHealth);
+      const c = ok(campsR, fallbackCampaigns);
+      const co = ok(contactsR, fallbackContacts);
+      const o = ok(outreachR, fallbackOutreach);
+      const r = ok(repliesR, fallbackReplies);
+      const p = ok(profilesR, fallbackProfiles);
+      const j = ok(jobsR, fallbackImportJobs);
+      const q = ok(reviewR, fallbackReviewQueue);
+      const bp = ok(bulkR, fallbackBulkProgress);
 
-      if (s) setStats(s);
-      if (h) setHealth(h);
-      if (c) setCampaigns(c);
-      if (co) setContacts(co);
-      if (o) setOutreach(o);
-      if (r) setReplies(r);
-      if (p) setProfiles(p);
-      if (j) setImportJobs(j);
-      if (q) setReviewQueue(q);
-      if (bp !== null) setBulkProgress(bp);
-      if (c) setSelectedCampaign(prev => prev || (c[0]?.id ?? ''));
+      setStats(s);
+      setHealth(h);
+      setCampaigns(c);
+      setContacts(co);
+      setOutreach(o);
+      setReplies(r);
+      setProfiles(p);
+      setImportJobs(j);
+      setReviewQueue(q);
+      setBulkProgress(bp);
+      setSelectedCampaign(prev => prev || (c[0]?.id ?? ''));
 
-      // Collect errors from failed calls
-      const failures = [statsR, healthR, campsR, contactsR, outreachR, repliesR, profilesR, jobsR, reviewR, bulkR]
-        .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
-        .map(r => (r.reason as Error)?.message || 'unknown error');
-      if (failures.length > 0) {
-        setError(`Some data failed to load: ${failures.join('; ')}`);
+      // Collect errors from failed calls with endpoint names
+      const endpointNames = [
+        'Dashboard stats', 'Integration health', 'Campaigns', 'Contacts',
+        'Outreach', 'Replies', 'Profiles', 'Import jobs',
+        'Review queue', 'Bulk progress',
+      ]
+      const allResults = [statsR, healthR, campsR, contactsR, outreachR, repliesR, profilesR, jobsR, reviewR, bulkR]
+      const namedResults = endpointNames.map((name, i) => ({ name, result: allResults[i] }))
+      const failed = namedResults
+        .filter((r): r is { name: string; result: PromiseRejectedResult } => r.result.status === 'rejected')
+        .map(r => r.name)
+      const failureMsgs = namedResults
+        .filter((r): r is { name: string; result: PromiseRejectedResult } => r.result.status === 'rejected')
+        .map(r => `${r.name}: ${(r.result.reason as Error)?.message || 'unknown error'}`)
+      if (failed.length > 0) {
+        setError(`Some data failed to load: ${failureMsgs.join('; ')}`);
+        setFailedEndpoints(failed);
+        setDegradedMode(true);
       } else {
         setError(null);
+        setFailedEndpoints([]);
+        setDegradedMode(false);
       }
     } catch (err) {
       setError((err as Error).message);
@@ -153,6 +191,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Auto-retry with exponential backoff when in degraded mode.
+  // Backoff schedule: 5s → 10s → 20s → 40s → 60s (capped), up to 8 attempts.
+  useEffect(() => {
+    if (!degradedMode) {
+      // Reset retry state when connection is healthy
+      retryCountRef.current = 0;
+      setRetryCount(0);
+      return;
+    }
+
+    const MAX_RETRIES = 8;
+    const BASE_DELAY = 5000;
+    const MAX_DELAY = 60000;
+
+    if (retryCountRef.current >= MAX_RETRIES) return
+
+    const delay = Math.min(MAX_DELAY, BASE_DELAY * Math.pow(2, retryCountRef.current))
+    const attempt = retryCountRef.current + 1
+
+    const timer = window.setTimeout(() => {
+      retryCountRef.current = attempt
+      setRetryCount(attempt)
+      refresh()
+    }, delay)
+
+    return () => window.clearTimeout(timer)
+  }, [degradedMode, retryCount, refresh]);
 
   const uploadAndQueueImport = async (file: File, fileType?: string) => {
     const jobId = await uploadImport(file, fileType);
@@ -214,6 +280,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return result;
   };
 
+  const runRepliesReset = async () => {
+    toast.info('Clearing processed cache and rescanning inbox for replies…');
+    const result = await triggerRepliesReset();
+    toast.success(`Rescan done — fetched ${result.fetched}, processed ${result.processed}`);
+    await refresh();
+    return result;
+  };
+
   const createLead = async (data: { name: string; email: string; organization?: string; role?: string }) => {
     await addLead(data);
     toast.success(`Lead created for ${data.name}`);
@@ -233,6 +307,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       value={{
         loading,
         error,
+        degradedMode,
+        failedEndpoints,
+        retryCount,
         stats,
         health,
         campaigns,
@@ -255,6 +332,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         runOutreach,
         runFollowups,
         runReplies,
+        runRepliesReset,
         createLead,
         bulkApproveAndSend,
       }}

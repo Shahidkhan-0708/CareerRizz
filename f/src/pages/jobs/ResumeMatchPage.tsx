@@ -2,7 +2,8 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { FileText, Upload, Loader2, CheckCircle, AlertCircle, Trash2 } from 'lucide-react'
 import { RiseIn } from '@/components/motion'
 import { Card, LoadingState } from '@/components/ui'
-import { getJobs, getResumes, uploadResume, deleteResume, matchResume, type Job, type Resume, type MatchAnalysis } from '@/lib/api'
+import { JobPicker } from '@/components/JobPicker'
+import { getResumes, uploadResume, deleteResume, matchResume, type Job, type Resume, type MatchAnalysis } from '@/lib/api'
 
 function MatchScoreRing({ score }: { score: number }) {
   const color = score >= 70 ? 'text-sage-bright' : score >= 40 ? 'text-amber' : 'text-red-500'
@@ -24,9 +25,8 @@ function MatchScoreRing({ score }: { score: number }) {
 }
 
 export function ResumeMatchPage() {
-  const [jobs, setJobs] = useState<Job[]>([])
   const [resumes, setResumes] = useState<Resume[]>([])
-  const [selectedJob, setSelectedJob] = useState('')
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null)
   const [selectedResume, setSelectedResume] = useState('')
   const [loading, setLoading] = useState(true)
   const [analyzing, setAnalyzing] = useState(false)
@@ -37,8 +37,7 @@ export function ResumeMatchPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [j, r] = await Promise.all([getJobs(), getResumes()])
-      setJobs(j)
+      const r = await getResumes()
       setResumes(r)
     } catch { /* empty */ }
     setLoading(false)
@@ -72,7 +71,7 @@ export function ResumeMatchPage() {
     if (!selectedJob) { setError('Select a job first.'); return }
     setAnalyzing(true); setError(''); setAnalysis(null)
     try {
-      const result = await matchResume(selectedJob, selectedResume || undefined)
+      const result = await matchResume(selectedJob.id, selectedResume || undefined)
       setAnalysis(result.analysis)
     } catch (err: any) { setError(err.message || 'Match failed') }
     setAnalyzing(false)
@@ -124,10 +123,11 @@ export function ResumeMatchPage() {
           <div className="flex items-end gap-4">
             <div className="flex-1">
               <label className="block text-[11px] text-ink-dim uppercase tracking-wider mb-1.5">Select a job to match against</label>
-              <select value={selectedJob} onChange={e => { setSelectedJob(e.target.value); setAnalysis(null) }} className="input-field w-full">
-                <option value="">Choose a job…</option>
-                {jobs.map(j => <option key={j.id} value={j.id}>{j.title} @ {j.company}</option>)}
-              </select>
+              <JobPicker
+                value={selectedJob?.id || ''}
+                onChange={job => { setSelectedJob(job); setAnalysis(null) }}
+                placeholder="e.g. Frontend Developer @ Stripe"
+              />
             </div>
             <button onClick={handleMatch} disabled={!selectedJob || analyzing} className="press raised-sm flex items-center gap-2 px-5 py-2.5 rounded-[12px] text-[13px] font-semibold shrink-0">
               {analyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}

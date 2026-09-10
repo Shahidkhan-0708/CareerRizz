@@ -39,9 +39,9 @@ export default defineConfig({
   server: {
     port: 5174,
     proxy: {
-      '/api': `http://localhost:${process.env.VITE_API_PORT || 5000}`,
-      '/auth': `http://localhost:${process.env.VITE_API_PORT || 5000}`,
-      '/health': `http://localhost:${process.env.VITE_API_PORT || 5000}`,
+      '/api': `http://127.0.0.1:${process.env.VITE_API_PORT || 5000}`,
+      '/auth': `http://127.0.0.1:${process.env.VITE_API_PORT || 5000}`,
+      '/health': `http://127.0.0.1:${process.env.VITE_API_PORT || 5000}`,
     },
   },
   build: {

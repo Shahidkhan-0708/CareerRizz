@@ -4,6 +4,18 @@ Record decisions that should remain valid across sessions.
 
 ---
 
+### 2026-09-10 — Autonomous Job Search Platform: adapted stack
+
+Context: User directed following `Autonomous job search architecture.md` (Phases 1–2 chosen). The doc recommends Fastify, Drizzle migrations, Turborepo/pnpm monorepo, Claude models, Voyage embeddings, Upstash Redis.
+
+Decision: User picked full monorepo + BullMQ/Upstash + OpenAI. Adaptations to resolve constraint conflicts: (1) SQL migrations in `db/migrations/*.sql` applied via `supabase db push --linked`, not Drizzle — schema-change rule in AGENTS.md; (2) doc's global `jobs` table renamed **`job_listings`** because a user-scoped `jobs` table already exists (RBAC, live data) — no destructive migration; (3) OpenAI tiered models replace Claude (haiku→gpt-4o-mini, sonnet/opus→gpt-4o, env-overridable), embeddings `text-embedding-3-small` at 1536 dims (doc assumed Voyage/1024 — `vector(1536)` in migration); (4) `f/` and legacy `src/` stay at repo root for now (30+ uncommitted files in tree) and join as workspaces in a later pass.
+
+Reason: Keep the doc's architecture while preserving the verified outreach product and the established DB workflow.
+
+Consequences: New platform code lives in `apps-monorepo/`; anything referencing the doc's `jobs`/`resumes` DDL must use `job_listings`/existing `resumes`. BullMQ requires a direct RESP `REDIS_URL` — Upstash REST credentials do not work.
+
+---
+
 ### 2026-08-15 — React app is the primary frontend
 
 Context: Two frontends existed — a complete vanilla-JS dashboard in `public/` (mock data) and an unbuilt React scaffold in `frontend/`.

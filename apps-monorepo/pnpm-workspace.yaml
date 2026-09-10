@@ -1,0 +1,11 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Symlinked node_modules is unreliable on OneDrive-synced Windows folders
+# (links point at nonexistent paths, bin shims go missing). Real files avoid it.
+nodeLinker: hoisted
+
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: true

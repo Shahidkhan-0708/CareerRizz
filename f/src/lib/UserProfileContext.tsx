@@ -21,6 +21,13 @@ interface UserProfileState {
 
 const UserProfileContext = createContext<UserProfileState | undefined>(undefined)
 
+const supabaseConfigured = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
+
+// Default profile when backend is unreachable — full access in dev, limited in prod.
+const DEFAULT_PROFILE: UserProfile = supabaseConfigured
+  ? { role: 'college_operator', enabled_modules: ['outreach'], active_workspace: 'outreach' }
+  : { role: 'owner', enabled_modules: ['outreach', 'job_search'], active_workspace: 'outreach' }
+
 export function UserProfileProvider({ children }: { children: ReactNode }) {
   const { user, getAccessToken } = useAuth()
   const [profile, setProfile] = useState<UserProfile | null>(null)
@@ -47,23 +54,28 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
 
       if (!res.ok) {
         // Fallback: try the auth endpoint
-        const fallback = await fetch('/auth/profile', {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        })
-        if (fallback.ok) {
-          const data = await fallback.json()
-          setProfile(data.profile)
-        } else {
-          setProfile({ role: 'college_operator', enabled_modules: ['outreach'], active_workspace: 'outreach' })
+        try {
+          const fallback = await fetch('/auth/profile', {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          })
+          if (fallback.ok) {
+            const data = await fallback.json()
+            setProfile(data.profile)
+            setError(null)
+          } else {
+            setProfile(DEFAULT_PROFILE)
+          }
+        } catch {
+          setProfile(DEFAULT_PROFILE)
         }
       } else {
         const data = await res.json()
         setProfile(data.profile)
+        setError(null)
       }
-      setError(null)
     } catch (err) {
       console.warn('Failed to fetch user profile:', err)
-      setProfile({ role: 'college_operator', enabled_modules: ['outreach'], active_workspace: 'outreach' })
+      setProfile(DEFAULT_PROFILE)
       setError((err as Error).message)
     } finally {
       setLoading(false)

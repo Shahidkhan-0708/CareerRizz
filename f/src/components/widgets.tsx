@@ -386,7 +386,12 @@ export function evidenceCount(p: Personalization): number {
 /* Inbound AI-classified list                                           */
 /* ------------------------------------------------------------------ */
 
-export const InboundList: React.FC<{ className?: string; title?: string }> = ({ className, title = 'Inbound' }) => {
+export const InboundList: React.FC<{
+  className?: string;
+  title?: string;
+  selectedCategory?: string | null;
+  onSelectCategory?: (cat: string | null) => void;
+}> = ({ className, title = 'Inbound', selectedCategory, onSelectCategory }) => {
   const { replies } = useApp()
   const counts = useMemo(() => {
     const m = new Map<string, number>()
@@ -406,27 +411,49 @@ export const InboundList: React.FC<{ className?: string; title?: string }> = ({ 
           <SectionTitle>{title}</SectionTitle>
           <MonoLabel className="mt-1">AI-classified</MonoLabel>
         </div>
-        <p className="font-display font-light text-[40px] leading-none text-ink">
-          <CountUp to={replies.length} duration={1400} delay={250} />
-        </p>
+        <div className="text-right">
+          <p className="font-display font-light text-[40px] leading-none text-ink">
+            <CountUp to={replies.length} duration={1400} delay={250} />
+          </p>
+          {selectedCategory && (
+            <button
+              onClick={() => onSelectCategory?.(null)}
+              className="text-[11px] text-blue hover:underline mt-1 font-mono block"
+            >
+              Clear filter
+            </button>
+          )}
+        </div>
       </div>
       <div className="mt-5 flex flex-col gap-3.5">
         {counts.length === 0 ? (
           <EmptyState title="No replies yet" hint="Inbound mail is detected via Gmail and classified here." />
         ) : (
-          counts.map(([cat, n], i) => (
-            <div key={cat}>
-              <div className="flex justify-between items-baseline mb-1.5">
-                <span className="font-mono text-[10px] text-ink-dim tracking-wider uppercase">{cat.replace(/_/g, ' ')}</span>
-                <span className="font-mono text-[12px]" style={{ color: replyClassColors[cat] || '#a89d91' }}>
-                  {n}
-                </span>
+          counts.map(([cat, n], i) => {
+            const isSelected = selectedCategory === cat
+            return (
+              <div
+                key={cat}
+                onClick={() => onSelectCategory?.(isSelected ? null : cat)}
+                className={cn(
+                  'p-2 -mx-2 rounded-xl transition-all cursor-pointer select-none',
+                  isSelected ? 'bg-amber/15 shadow-sm ring-1 ring-amber-ink/20' : 'hover:bg-fainter/50'
+                )}
+              >
+                <div className="flex justify-between items-baseline mb-1.5">
+                  <span className="font-mono text-[10px] text-ink-dim tracking-wider uppercase font-semibold">
+                    {cat.replace(/_/g, ' ')}
+                  </span>
+                  <span className="font-mono text-[12px] font-bold" style={{ color: replyClassColors[cat] || '#a89d91' }}>
+                    {n}
+                  </span>
+                </div>
+                <div className="recessed-sm h-3 rounded-full p-[3px]">
+                  <GrowingBar width={(n / max) * 100} color={replyClassColors[cat] || '#a89d91'} delay={350 + i * 60} />
+                </div>
               </div>
-              <div className="recessed-sm h-3 rounded-full p-[3px]">
-                <GrowingBar width={(n / max) * 100} color={replyClassColors[cat] || '#a89d91'} delay={350 + i * 60} />
-              </div>
-            </div>
-          ))
+            )
+          })
         )}
       </div>
     </Card>

@@ -18,10 +18,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const supabaseConfigured = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
+
   useEffect(() => {
+    // If Supabase isn't configured, skip auth and let the user in with dev bypass.
+    if (!supabaseConfigured) {
+      setLoading(false);
+      return;
+    }
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
+      setLoading(false);
+    }).catch(() => {
+      // Supabase unreachable — let the user through; API calls will use bypass auth or fail gracefully.
       setLoading(false);
     });
 
@@ -31,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [supabaseConfigured]);
 
   const signUp = async (email: string, password: string, name?: string) => {
     try {
@@ -82,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await supabase.auth.setSession(sbData.session);
         }
         return {};
-      } catch (fallbackErr: any) {
+      } catch {
         return { error: err?.message || 'Signup failed. Please ensure the backend is running.' };
       }
     }
@@ -119,7 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { error: directErr } = await supabase.auth.signInWithPassword({ email, password });
         if (directErr) return { error: directErr.message };
         return {};
-      } catch (fallbackErr: any) {
+      } catch {
         return { error: err?.message || 'Login failed. Please check your credentials.' };
       }
     }
@@ -133,7 +144,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user: session?.user ?? null,
+      // When Supabase isn't configured, synthesize a minimal user so the app renders.
+      user: session?.user ?? (!supabaseConfigured ? { id: 'dev-user', email: 'dev@local' } as any : null),
       session,
       loading,
       signUp,

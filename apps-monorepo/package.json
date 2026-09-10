@@ -1,0 +1,21 @@
+{
+  "name": "job-search-platform",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@12.3.4",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "dev:api": "pnpm --filter @jobsearch/api dev",
+    "dev:workers": "pnpm --filter @jobsearch/workers dev",
+    "worker:discovery": "pnpm --filter @jobsearch/workers start:discovery"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.5"
+  }
+}

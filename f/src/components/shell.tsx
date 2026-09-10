@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   Gauge,
@@ -276,8 +276,89 @@ const nowLabel = () => {
 const isActiveCampaign = (status: string | null | undefined) =>
   ['active', 'running'].includes(String(status || '').toLowerCase())
 
+function DegradedBanner({ failedEndpoints, retryCount, onRetry }: { failedEndpoints: string[]; retryCount: number; onRetry: () => void }) {
+  const [expanded, setExpanded] = useState(false)
+  const [retrying, setRetrying] = useState(false)
+  const [countdown, setCountdown] = useState(0)
+  const MAX_RETRIES = 8
+  const BASE_DELAY = 5000
+  const MAX_DELAY = 60000
+
+  // Live countdown to next retry
+  useEffect(() => {
+    if (retryCount >= MAX_RETRIES || retrying) {
+      setCountdown(0)
+      return
+    }
+    const nextDelay = Math.min(MAX_DELAY, BASE_DELAY * Math.pow(2, retryCount))
+    setCountdown(Math.ceil(nextDelay / 1000))
+
+    const tick = window.setInterval(() => {
+      setCountdown(prev => Math.max(0, prev - 1))
+    }, 1000)
+    return () => window.clearInterval(tick)
+  }, [retryCount, retrying])
+
+  const handleRetry = async () => {
+    setRetrying(true)
+    await onRetry()
+    setRetrying(false)
+  }
+
+  return (
+    <div className="recessed-sm rounded-[14px] border border-amber/30 bg-amber/5 overflow-hidden">
+      <div className="px-5 py-3 flex items-center gap-3">
+        <span className="w-2 h-2 rounded-full bg-amber animate-pulse shrink-0" />
+        <p className="text-[12.5px] text-amber-ink font-semibold flex-1">
+          Backend unreachable — showing placeholder data.
+          {failedEndpoints.length > 0 && (
+            <>
+              {' '}
+              <button
+                onClick={() => setExpanded(e => !e)}
+                className="underline hover:text-amber transition-colors"
+              >
+                {expanded ? 'Hide details' : `${failedEndpoints.length} endpoint${failedEndpoints.length === 1 ? '' : 's'} failed`}
+              </button>
+            </>
+          )}
+          {' '}
+          <button onClick={handleRetry} className="underline hover:text-amber transition-colors">
+            {retrying ? 'Retrying…' : 'Retry'}
+          </button>
+          {retryCount > 0 && retryCount < MAX_RETRIES && countdown > 0 && (
+            <span className="font-mono text-[11px] text-amber-ink/60 ml-2">
+              next retry in {countdown}s (attempt {retryCount + 1}/{MAX_RETRIES})
+            </span>
+          )}
+          {retryCount >= MAX_RETRIES && (
+            <span className="font-mono text-[11px] text-amber-ink/60 ml-2">
+              auto-retry stopped — click Retry to resume
+            </span>
+          )}
+        </p>
+      </div>
+      {expanded && failedEndpoints.length > 0 && (
+        <div className="px-5 pb-3 pt-0">
+          <div className="recessed rounded-[10px] px-3.5 py-2.5">
+            <p className="font-mono text-[10px] uppercase tracking-wider text-amber-ink/60 mb-1.5">Failed endpoints</p>
+            <div className="flex flex-wrap gap-1.5">
+              {failedEndpoints.map(name => (
+                <span key={name} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber/10 border border-amber/20 text-[11px] font-mono text-amber-ink">
+                  <span className="w-1.5 h-1.5 rounded-full bg-terra shrink-0" />
+                  {name}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { stats, campaigns, contacts, refresh, loading } = useApp()
+  const { stats, campaigns, contacts, refresh, loading, degradedMode, failedEndpoints, retryCount } = useApp()
   const { profile } = useUserProfile()
   const activeCampaigns = campaigns.filter(c => isActiveCampaign(c.status)).length
   const institutions = new Set(contacts.map(c => c.organization).filter(Boolean)).size
@@ -300,6 +381,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <main className="flex flex-col gap-7 min-w-0">
+          {/* degraded mode banner */}
+          {degradedMode && (
+            <DegradedBanner failedEndpoints={failedEndpoints} retryCount={retryCount} onRetry={refresh} />
+          )}
           {/* mobile nav — horizontal scroll of the same sections */}
           <nav className="lg:hidden flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" aria-label="Primary">
             {NAV.map(item => {

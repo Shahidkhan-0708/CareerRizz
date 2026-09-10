@@ -71,13 +71,13 @@ before(async () => {
 });
 
 function requireSetup(t) {
-  if (!up) return t.skip('backend not running — run npm start first');
-  if (!ownerToken) return t.skip('owner auth failed');
+  if (!up) { t.skip('backend not running — run npm start first'); throw new Error('skip'); }
+  if (!ownerToken) { t.skip('owner auth failed'); throw new Error('skip'); }
 }
 
 function requireJobSearch(t) {
   requireSetup(t);
-  if (!hasJobSearchAccess) return t.skip('owner does not have job_search module (existing profiles in DB)');
+  if (!hasJobSearchAccess) { t.skip('owner does not have job_search module (existing profiles in DB)'); throw new Error('skip'); }
 }
 
 // ===========================================================================

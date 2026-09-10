@@ -470,3 +470,56 @@ Options: (1) Add PDF resume text extraction, (2) Add job discovery from external
 
 ### Next recommended action
 Project is complete and ready for deployment. All milestones are done.
+
+## 2026-08-24 — Gmail OAuth Refresh Token Fix & Logger Improvements
+
+### What happened
+
+1. **Fixed "Error fetching recent Gmail replies"**:
+   - Diagnosed root cause: `invalid_grant` from Google OAuth API due to expired/invalid `GMAIL_REFRESH_TOKEN` in `.env`.
+   - Updated `src/utils/logger.js`: fixed console formatter so `restMeta` (containing `{ error: ... }`) is printed cleanly instead of being stripped by `defaultMeta`.
+   - Updated `src/integrations/gmail/client.js`: added early check for missing token and explicit diagnostic logging for `invalid_grant`.
+
+2. **Verified Gmail Integration**:
+   - User re-authorized via `http://localhost:5000/auth/google` and updated `GMAIL_REFRESH_TOKEN` in `.env`.
+   - Executed live API test: successfully connected and fetched 50 messages from Gmail inbox (`getRecentReplies()` returned 50 messages, 0 errors).
+   - Ran `test-verification.js`: all 6 suites passed.
+
+## 2026-09-10 — Autonomous Job Search Platform: Phases 1+2 built (monorepo)
+
+### What happened
+
+User asked to follow `Autonomous job search architecture.md`. After required startup inspection, flagged scope/stack conflicts and got decisions via structured questions: **Phase 1+2**, **full monorepo**, **BullMQ + Upstash Redis**, **OpenAI tiered** (instead of Claude). pnpm approved + installed globally (12.3.4). Upstash provisioning disabled agent-side → user has the tracked setup link and must paste `REDIS_URL`.
+
+1. **Monorepo** `apps-monorepo/`: pnpm workspaces + Turborepo, 4 packages + 2 apps, all TypeScript strict, `pnpm -r typecheck` clean, `pnpm -r test` 35/35 green.
+2. **packages/sources**: JobSource interface + Greenhouse/Lever/Ashby/Adzuna adapters (official public APIs only, doc §9 compliance), normalizer with sha256 `canonical_hash` (dedup), seniority/remote inference, salary parsing, and a `stripHtml` helper fixing **double-escaped HTML found live** (Greenhouse content decodes back to tags after naive stripping) — regression-tested. Env-driven registry: `JOB_SOURCES_GREENHOUSE=vercel:Vercel,...`.
+3. **packages/db**: platform + user-scoped Supabase clients; `saveNormalizedListing` (upsert job_listings by canonical_hash + job_sources by (source_type, external_job_id), isNew detection); `wrapAgentRun` (every agent execution auto-logged to agent_runs — success/failure/duration); `writeAudit` (never throws); ioredis RESP connection (`maxRetriesPerRequest: null` per BullMQ); RedisRateLimiter (60s fixed window per source+board); shared BullMQ queue defs (moved out of workers into db so API + workers share one source of truth).
+4. **packages/llm-gateway**: tiered routing (haiku→gpt-4o-mini, sonnet/opus→gpt-4o; `LLM_MODEL_*` env overrides), JSON-mode structured completion, embeddings (text-embedding-3-small, 1536-dim), **per-candidate daily USD budget enforced before each call** (Redis ledger, TTL to UTC midnight; BudgetExceededError pauses work).
+5. **apps/workers**: discovery.scan (fan-out per source, rate-limit honored, graceful per-source failure) + discovery.process (normalize → persist inside wrapAgentRun), 5-min repeatable scan, clean SIGINT/SIGTERM shutdown.
+6. **apps/api**: Fastify :5100, `buildApp()` extracted for injection tests, optional `PLATFORM_ADMIN_KEY` x-api-key gate; routes: /health, GET /api/jobs(+/:id) (status/company/remote filters), GET /api/sources, GET /api/agent/runs, POST /api/discovery/scan (Zod-validated, 202 + audit), GET /api/queue/health.
+7. **Migration** `db/migrations/20240101001100_create_job_search_platform_tables.sql`: candidate_profiles, **job_listings** (global; doc's `jobs` renamed to avoid collision with existing user-scoped `jobs`), job_sources, job_snapshots, job_research, job_matches, agent_runs, audit_log, source_configs (seeded with 4 sources), vector(1536) + HNSW in exception-safe DO block, RLS on candidate-scoped tables only (discovery tables are global by design, API-layer access control). NOT yet applied.
+8. **Live read-only probe** (no Supabase/Redis): Vercel Greenhouse board → 87 listings, all unique hashes, clean descriptions, correct remote/seniority/date extraction. Writes nothing.
+9. **pnpm 12 specifics**: build scripts allowlisted via `allowBuilds:` map in pnpm-workspace.yaml (esbuild, msgpackr-extract) — `onlyBuiltDependencies` in package.json did NOT work and pnpm auto-inserted a template.
+
+### Key decisions recorded in decisions.md
+
+job_listings rename; SQL migrations not Drizzle; OpenAI tiers + 1536-dim; `f/` + `src/` join workspaces later; BullMQ needs RESP not Upstash REST.
+
+### Verification run
+
+- `pnpm install` clean; `pnpm -r typecheck` 6/6 ✓; `pnpm -r test` 35/35 ✓ (sources 32 incl. stripHtml regressions, workers 2 with mocked Supabase chain, api 5 via app.inject)
+- Live probe: `pnpm --filter @jobsearch/workers exec tsx ../../scripts/live-discovery-probe.mts vercel Vercel` → 87 listings ✓
+- `git status`: only new untracked `apps-monorepo/` + the migration; all ~30 pre-existing uncommitted files untouched; no legacy code modified.
+- NOT run: `supabase db push` (needs user's linked-project approval), worker/API boots (need REDIS_URL), full E2E queue test.
+
+### Known issues / follow-ups
+
+- **Blocked on user**: paste Upstash `REDIS_URL` (RESP `rediss://…`, not REST); then apply migration via `npx supabase db push --linked`.
+- Adzuna adapter exists but needs `ADZUNA_APP_ID`/`ADZUNA_APP_KEY` (free registration) to activate.
+- `f/` UI does not yet show platform data (job_listings pages are Phase 3+ work alongside the Realtime activity feed).
+- Legacy `node test/job-search.test.js` etc. still target the old backend; platform has its own vitest suites.
+
+### Next recommended action
+
+User pastes `REDIS_URL` → I add it to `.env`, apply the migration, boot workers + API, run E2E scan → verify rows in `job_listings` → then start Phase 3 (research + matching agents).
+

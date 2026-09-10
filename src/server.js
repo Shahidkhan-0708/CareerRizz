@@ -18,7 +18,7 @@ import { processFollowUpsBatch } from './services/followup.service.js';
 import { processPendingPersonalizations } from './services/personalization.service.js';
 import { processIncomingReplies } from './services/reply.service.js';
 import { syncSupabaseToAirtable } from './integrations/airtable/sync.js';
-import { resetStaleClaims } from './db/outreach.js';
+import { resetStaleClaims, clearProcessedGmailMessages } from './db/outreach.js';
 
 // Integrations & Webhooks
 import { generateAuthUrl, exchangeCodeForTokens, testGmail } from './integrations/gmail/client.js';
@@ -225,6 +225,18 @@ app.post('/api/trigger/replies', requireAuth, async (req, res) => {
     res.json({ success: true, result });
   } catch (err) {
     logger.error('Manual reply trigger failed:', { error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/trigger/replies/reset', requireAuth, async (req, res) => {
+  logger.info('Manual reset & scan request received for Reply detection job.');
+  try {
+    await clearProcessedGmailMessages();
+    const result = await processIncomingReplies();
+    res.json({ success: true, reset: true, result });
+  } catch (err) {
+    logger.error('Manual reply reset & trigger failed:', { error: err.message });
     res.status(500).json({ error: err.message });
   }
 });

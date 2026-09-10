@@ -26,6 +26,12 @@ let profileId = null;
 let personalizationId = null;
 
 const run = async () => {
+  // Check backend reachability first — skip gracefully if not running.
+  try {
+    const res = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) { console.log('\n⏭️  Backend not healthy — skipping sync check'); process.exit(0); }
+  } catch { console.log('\n⏭️  Backend not running — skipping sync check'); process.exit(0); }
+
   console.log('\n===== CROSS-PAGE SYNC TEST (UI actions → all endpoints) =====\n');
 
   // 1. Add lead (PeoplePage "Add lead" action)

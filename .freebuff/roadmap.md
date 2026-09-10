@@ -54,3 +54,18 @@ Status: complete
 - [x] Remove debug/test code and demo data — all test/verification contacts deleted from Supabase (2 e2e leads + curl.probe + pipeline.alpha/beta + test.researcher + your_test_email + 2 gmail SMTP-test contacts; 0 contacts remain, 2026-08-18). `f/` demo arrays removed (`demo.ts` deleted; `replyClassColors` moved to `reply-colors.ts`); the 3 demo sections (Settings integrations, sidebar activity feed, Personalization variant picker) now show honest empty states. Sidebar service dots + ServiceHealth list reflect real `config.integrations`; full hardcoded-data sweep done — every display value now comes from the API or is an honest empty state (hourly chart from `sent_at`, dials from `delivery_status`, sequence days from followup config, pacing from `sendDelayMs`/`smtpConcurrency`, no fake counts) (2026-08-18).
 - [x] Confirm deployment instructions — new root `README.md` documents serve-from-`f/dist`, `npm start`, provider-agnostic steps, env table, cron schedule, security checklist (2026-08-18).
 - [x] Final release pass — zero demo data, zero TODOs, zero hardcoded values in frontend. Full scan clean (2026-08-21).
+
+## Milestone 6: Autonomous Job Search Platform — IN PROGRESS
+
+Status: Phase 1+2 built (2026-09-10), pending Redis + migration + E2E
+
+Per `Autonomous job search architecture.md` (user-directed). New code in `apps-monorepo/` (pnpm workspaces + Turborepo).
+
+- [x] **Phase 1 — Foundation**: monorepo skeleton; `packages/shared-types` (Zod), `packages/db` (Supabase clients, agent_runs wrapper, audit log, Redis, rate limiter, shared BullMQ queues), `packages/llm-gateway` (OpenAI tiered routing + daily budget pre-call enforcement), `apps/api` (Fastify :5100); migration `20240101001100` (candidate_profiles, job_listings + pgvector, job_sources, job_snapshots, job_research, job_matches, agent_runs, audit_log, source_configs, RLS) — NOT yet applied.
+- [x] **Phase 2 — Discovery**: `packages/sources` (Greenhouse/Lever/Ashby/Adzuna official-API adapters, canonical_hash normalizer, double-escape HTML fix, env-driven registry); `apps/workers` (discovery.scan fan-out + discovery.process persist, 5-min repeat, per-source rate limiting, graceful degradation); verified 35/35 tests + live read-only probe (87 real Vercel listings, unique hashes).
+- [ ] Redis credentials from user (Upstash RESP `REDIS_URL`)
+- [ ] Apply migration via `supabase db push --linked`
+- [ ] E2E: scan trigger → job_listings rows
+- [ ] Phase 3 — Intelligence: research agent (→ job_research), matching agent (embeddings + LLM → job_matches), Realtime activity feed
+- [ ] Phase 4 — Application automation (assisted): policy engine, approval queue, Playwright form-fill
+- [ ] Phase 5 — Autopilot + learning loop (doc: auto-submit only per policy; outcome tracking; digest)

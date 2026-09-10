@@ -2,12 +2,13 @@ import { useEffect, useState, useCallback } from 'react'
 import { WandSparkles, Copy, Check, Loader2 } from 'lucide-react'
 import { RiseIn } from '@/components/motion'
 import { Card, LoadingState } from '@/components/ui'
-import { getJobs, getResumes, generateCoverLetter, type Job, type Resume } from '@/lib/api'
+import { JobPicker } from '@/components/JobPicker'
+import { getResumes, generateCoverLetter, type Job, type Resume } from '@/lib/api'
 
 export function JobPersonalizationPage() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [resumes, setResumes] = useState<Resume[]>([])
-  const [selectedJob, setSelectedJob] = useState('')
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null)
   const [selectedResume, setSelectedResume] = useState('')
   const [tone, setTone] = useState('')
   const [loading, setLoading] = useState(true)
@@ -19,8 +20,7 @@ export function JobPersonalizationPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [j, r] = await Promise.all([getJobs(), getResumes()])
-      setJobs(j)
+      const r = await getResumes()
       setResumes(r)
     } catch { /* empty */ }
     setLoading(false)
@@ -32,7 +32,7 @@ export function JobPersonalizationPage() {
     if (!selectedJob) { setError('Select a job first.'); return }
     setGenerating(true); setError(''); setCoverLetter(''); setGeneratedFor(null)
     try {
-      const result = await generateCoverLetter(selectedJob, selectedResume || undefined, tone || undefined)
+      const result = await generateCoverLetter(selectedJob.id, selectedResume || undefined, tone || undefined)
       setCoverLetter(result.coverLetter)
       setGeneratedFor({ job: `${result.job.title} @ ${result.job.company}`, resume: result.resume.filename })
     } catch (err: any) {
@@ -61,10 +61,11 @@ export function JobPersonalizationPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-[11px] text-ink-dim uppercase tracking-wider mb-1.5">Select a job</label>
-              <select value={selectedJob} onChange={e => { setSelectedJob(e.target.value); setCoverLetter(''); setGeneratedFor(null) }} className="input-field w-full">
-                <option value="">Choose a job…</option>
-                {jobs.map(j => <option key={j.id} value={j.id}>{j.title} @ {j.company}</option>)}
-              </select>
+              <JobPicker
+                value={selectedJob?.id || ''}
+                onChange={job => { setSelectedJob(job); setCoverLetter(''); setGeneratedFor(null) }}
+                placeholder="e.g. Product Manager @ Microsoft"
+              />
             </div>
             <div>
               <label className="block text-[11px] text-ink-dim uppercase tracking-wider mb-1.5">Select a resume (optional)</label>

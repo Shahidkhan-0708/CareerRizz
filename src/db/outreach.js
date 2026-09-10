@@ -337,3 +337,19 @@ export async function findOutreachByGmailThreadId(threadId) {
   }
   return data;
 }
+
+export async function clearProcessedGmailMessages() {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from('processed_gmail_messages')
+    .delete()
+    .not('message_id', 'is', null);
+
+  if (error) {
+    logger.error('Error clearing processed Gmail messages:', { error: error.message });
+    throw error;
+  }
+  logger.info('Cleared processed_gmail_messages table.');
+}
+
+

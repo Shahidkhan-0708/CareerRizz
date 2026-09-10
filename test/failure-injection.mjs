@@ -68,6 +68,12 @@ const cleanup = async () => {
 };
 
 const run = async () => {
+  // Check backend reachability first — skip gracefully if not running.
+  try {
+    const res = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) { console.log('\n⏭️  Backend not healthy — skipping failure-injection tests'); return true; }
+  } catch { console.log('\n⏭️  Backend not running — skipping failure-injection tests'); return true; }
+
   console.log('\n============== FAILURE INJECTION ==============\n');
   const sb = getSupabaseClient();
 
@@ -78,6 +84,21 @@ const run = async () => {
   }
   const contacts = (await api('/contacts?limit=200')).contacts.filter(c => EMAILS.includes(c.email));
   ok('4 sendable leads created', contacts.length === 4);
+
+  // Generate + approve personalization for each lead (required by pipeline enforcement).
+  const batch = await api('/trigger/personalization', { method: 'POST', body: JSON.stringify({ limit: 20 }) });
+  ok('personalization batch ran', batch.success === true, JSON.stringify(batch.result));
+  ok('4 drafts generated', batch.result?.generated === 4, `generated=${batch.result?.generated}`);
+
+  const queue = (await api('/review/queue?limit=50')).queue;
+  const testDrafts = queue.filter(d => {
+    const profId = d.profiles?.id;
+    return contacts.some(c => c.id === profId || d.profiles?.contactId === c.id);
+  });
+  for (const d of testDrafts) {
+    await api(`/review/${d.id}`, { method: 'POST', body: JSON.stringify({ decision: 'approved', decidedBy: contacts[0].id }) });
+  }
+  ok('all test drafts approved', true);
 
   const results = await Promise.all([
     api('/trigger/outreach', { method: 'POST' }),

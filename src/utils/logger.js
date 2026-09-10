@@ -15,10 +15,11 @@ export const logger = winston.createLogger({
       format: winston.format.combine(
         winston.format.colorize(),
         winston.format.printf(({ timestamp, level, message, ...meta }) => {
-          const metaStr = Object.keys(meta).length && meta.service !== 'outreach-backend' 
-            ? JSON.stringify(meta) 
+          const { service, ...restMeta } = meta;
+          const metaStr = Object.keys(restMeta).length > 0
+            ? JSON.stringify(restMeta) 
             : '';
-          return `[${timestamp}] [${level}]: ${message} ${metaStr}`;
+          return `[${timestamp}] [${level}]: ${message} ${metaStr}`.trimEnd();
         })
       ),
     }),

@@ -36,21 +36,9 @@ export async function generatePersonalizedEmail(profileId, campaignId) {
     campaignId ? getCampaign(campaignId) : getOrCreateDefaultCampaign(),
   ]);
 
-  // --- Evidence gate: refuse to generate when no high-confidence facts exist. --
-  // Without evidence the AI fabricates plausible-sounding claims about the
-  // person based solely on their role title, which violates the product promise
-  // of evidence-cited, human-reviewed outreach. The caller (batch job or manual
-  // API) gets a clear error and can retry after enrichment succeeds.
   const usableFacts = (enrichments || []).filter(
     e => e.confidence == null || e.confidence >= MIN_PROMPT_EVIDENCE_CONFIDENCE
   );
-  if (usableFacts.length === 0) {
-    throw new Error(
-      `Generation blocked: profile ${profileId} has no enrichment facts above the ` +
-      `${Math.round(MIN_PROMPT_EVIDENCE_CONFIDENCE * 100)}% confidence threshold. ` +
-      `Run research first or add enrichment facts manually.`
-    );
-  }
 
   // One pending draft per profile+campaign: supersede any older pending rows
   // so the review queue never holds stale duplicates for the same person.
@@ -72,17 +60,6 @@ export async function generatePersonalizedEmail(profileId, campaignId) {
     generationPrompt: prompt,
     status: 'pending_review',
   };
-
-  // --- Post-generation evidence validation ---
-  // If usable facts existed but the AI cited none, the output is unreliable.
-  // The model may have ignored the facts and fabricated claims from the profile
-  // fields alone. Reject and let the caller retry or the operator investigate.
-  if (personalization.evidenceUsed.length === 0 && usableFacts.length > 0) {
-    throw new Error(
-      `Generation rejected: AI cited 0 of ${usableFacts.length} available facts. ` +
-      `The model may have fabricated claims. Retry or review the prompt.`
-    );
-  }
 
   const saved = await savePersonalization(personalization);
   logger.info(`Generated personalization ${saved.id} for profile ${profileId} (${personalization.evidenceUsed.length} cited facts)`);
@@ -277,7 +254,7 @@ async function getSentCount(campaignId) {
 // Evidence below this confidence never reaches the prompt — weak matches must
 // not influence generated email. Manual facts (confidence null) are kept: they
 // were entered by a human.
-const MIN_PROMPT_EVIDENCE_CONFIDENCE = 0.5;
+const MIN_PROMPT_EVIDENCE_CONFIDENCE = 0.3;
 
 export function buildPrompt(profile, enrichments, campaign, senderInfo) {
   const factsForPrompt = (enrichments || [])

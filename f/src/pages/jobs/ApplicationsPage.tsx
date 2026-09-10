@@ -26,7 +26,16 @@ export function ApplicationsPage() {
 
   useEffect(() => {
     const token = getAccessToken()
-    if (!token) return
+    if (!token) {
+      // No auth token — try with bypass auth in dev, otherwise show empty state
+      fetch('/api/applications', {
+        headers: import.meta.env.DEV ? { 'x-bypass-auth': 'true' } : {},
+      })
+        .then(r => r.json())
+        .then(d => { setApplications(d.applications || []); setLoading(false) })
+        .catch(() => setLoading(false))
+      return
+    }
     fetch('/api/applications', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(d => { setApplications(d.applications || []); setLoading(false) })

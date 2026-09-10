@@ -1,13 +1,17 @@
 {
-  "name": "college-outreach-automation",
-  "version": "1.0.0",
-  "description": "College Outreach Automation System V2",
+  "name": "career-rizz",
+  "version": "2.0.0",
+  "description": "CareerRizz — Autonomous Job Search, AI Career Intelligence & Outreach Engine",
   "main": "src/server.js",
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch-path=src src/server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "heroku-postbuild": "cd f && npm install && npm run build"
+  },
+  "engines": {
+    "node": "20.x"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.6",

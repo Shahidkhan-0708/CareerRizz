@@ -6,6 +6,7 @@
 import { supabase } from './supabase'
 
 const ADMIN_API_KEY = (import.meta.env.VITE_ADMIN_API_KEY as string | undefined) || ''
+const SUPABASE_CONFIGURED = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
 
 export class ApiError extends Error {
   status: number
@@ -21,13 +22,21 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 
   // Priority: Supabase JWT > API key > dev bypass
-  const { data: { session } } = await supabase.auth.getSession()
-  if (session?.access_token) {
-    headers['Authorization'] = `Bearer ${session.access_token}`
-  } else if (ADMIN_API_KEY) {
-    headers['x-api-key'] = ADMIN_API_KEY
-  } else if (import.meta.env.DEV) {
-    headers['x-bypass-auth'] = 'true'
+  // Only attempt Supabase JWT when Supabase is actually configured;
+  // otherwise a stale session in localStorage produces invalid JWTs.
+  if (SUPABASE_CONFIGURED) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`
+    }
+  }
+
+  if (!headers['Authorization']) {
+    if (ADMIN_API_KEY) {
+      headers['x-api-key'] = ADMIN_API_KEY
+    } else if (import.meta.env.DEV) {
+      headers['x-bypass-auth'] = 'true'
+    }
   }
 
   if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
@@ -119,6 +128,7 @@ export interface OutreachRow {
   reply_body: string | null
   ai_category: string | null
   ai_confidence: number | null
+  ai_sentiment?: string | null
   ai_summary: string | null
   ai_next_action: string | null
   delivery_status: string | null
@@ -366,6 +376,11 @@ export const triggerFollowups = () =>
 
 export const triggerReplies = () =>
   request<{ success: boolean; result: { fetched: number; processed: number; skipped: number } }>('/trigger/replies', {
+    method: 'POST',
+  }).then(r => r.result)
+
+export const triggerRepliesReset = () =>
+  request<{ success: boolean; result: { fetched: number; processed: number; skipped: number } }>('/trigger/replies/reset', {
     method: 'POST',
   }).then(r => r.result)
 

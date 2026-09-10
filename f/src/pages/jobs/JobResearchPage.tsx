@@ -1,33 +1,22 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useState } from 'react'
 import { SearchCheck, ExternalLink, Loader2 } from 'lucide-react'
 import { RiseIn } from '@/components/motion'
-import { Card, LoadingState } from '@/components/ui'
-import { getJobs, researchJob, type Job, type ResearchFact } from '@/lib/api'
+import { Card } from '@/components/ui'
+import { JobPicker } from '@/components/JobPicker'
+import { researchJob, type Job, type ResearchFact } from '@/lib/api'
 
 export function JobResearchPage() {
-  const [jobs, setJobs] = useState<Job[]>([])
-  const [selectedJob, setSelectedJob] = useState<string>('')
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null)
   const [researchFocus, setResearchFocus] = useState('')
   const [facts, setFacts] = useState<ResearchFact[]>([])
-  const [loading, setLoading] = useState(true)
   const [researching, setResearching] = useState(false)
   const [error, setError] = useState('')
-
-  const fetchJobs = useCallback(async () => {
-    try {
-      const data = await getJobs()
-      setJobs(data)
-    } catch { /* empty */ }
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { fetchJobs() }, [fetchJobs])
 
   const handleResearch = async () => {
     if (!selectedJob) return
     setResearching(true); setError(''); setFacts([])
     try {
-      const result = await researchJob(selectedJob, researchFocus.trim() || undefined)
+      const result = await researchJob(selectedJob.id, researchFocus.trim() || undefined)
       setFacts(result.facts || [])
       if (!result.facts?.length) setError('No research results found. Try a different company or adjust your focus topics.')
     } catch (err: any) {
@@ -36,13 +25,9 @@ export function JobResearchPage() {
     setResearching(false)
   }
 
-  const selectedJobObj = jobs.find(j => j.id === selectedJob)
-
   // Also show any existing research notes from the job
-  const existingNotes = selectedJobObj?.notes || ''
+  const existingNotes = selectedJob?.notes || ''
   const hasExistingResearch = existingNotes.includes('--- Research')
-
-  if (loading) return <LoadingState label="Loading jobs for research…" />
 
   return (
     <RiseIn>
@@ -56,14 +41,11 @@ export function JobResearchPage() {
           <div className="flex items-end gap-4">
             <div className="flex-1">
               <label className="block text-[11px] text-ink-dim uppercase tracking-wider mb-1.5">Select a job to research</label>
-              <select
-                value={selectedJob}
-                onChange={e => { setSelectedJob(e.target.value); setFacts([]); setError('') }}
-                className="input-field w-full"
-              >
-                <option value="">Choose a job…</option>
-                {jobs.map(j => <option key={j.id} value={j.id}>{j.title} @ {j.company}</option>)}
-              </select>
+              <JobPicker
+                value={selectedJob?.id || ''}
+                onChange={job => { setSelectedJob(job); setFacts([]); setError('') }}
+                placeholder="e.g. Backend Engineer @ Netflix"
+              />
             </div>
             <button
               onClick={handleResearch}
@@ -99,7 +81,7 @@ export function JobResearchPage() {
 
         {facts.length > 0 && (
           <div className="space-y-3">
-            <h3 className="font-display text-lg text-ink">Research Results — {selectedJobObj?.company}</h3>
+            <h3 className="font-display text-lg text-ink">Research Results — {selectedJob?.company}</h3>
             {facts.map((fact, i) => (
               <Card key={i} className="p-4">
                 <div className="flex items-start gap-3">
@@ -122,7 +104,7 @@ export function JobResearchPage() {
           </div>
         )}
 
-        {hasExistingResearch && facts.length === 0 && (
+        {selectedJob && hasExistingResearch && facts.length === 0 && (
           <Card className="p-6">
             <h3 className="font-display text-lg text-ink mb-3">Previous Research</h3>
             <p className="text-sm text-ink-dim whitespace-pre-wrap">{existingNotes}</p>
