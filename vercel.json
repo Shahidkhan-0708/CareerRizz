@@ -1,36 +1,51 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "version": 2,
-  "buildCommand": "npm run build",
-  "outputDirectory": "f/dist",
+  "services": {
+    "web": {
+      "root": "f",
+      "framework": "vite"
+    },
+    "api": {
+      "root": ".",
+      "framework": "express"
+    }
+  },
   "rewrites": [
     {
-      "source": "/",
-      "destination": "/landing.html"
-    },
-    {
       "source": "/api/(.*)",
-      "destination": "/api/index.js"
+      "destination": {
+        "service": "api"
+      }
     },
     {
       "source": "/auth/(.*)",
-      "destination": "/api/index.js"
+      "destination": {
+        "service": "api"
+      }
     },
     {
       "source": "/webhooks/(.*)",
-      "destination": "/api/index.js"
+      "destination": {
+        "service": "api"
+      }
     },
     {
       "source": "/health",
-      "destination": "/api/index.js"
+      "destination": {
+        "service": "api"
+      }
     },
     {
       "source": "/unsubscribe",
-      "destination": "/api/index.js"
+      "destination": {
+        "service": "api"
+      }
     },
     {
       "source": "/(.*)",
-      "destination": "/index.html"
+      "destination": {
+        "service": "web"
+      }
     }
   ]
 }

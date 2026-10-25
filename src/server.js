@@ -338,12 +338,13 @@ app.post('/api/leads', requireAuth, async (req, res) => {
   }
 });
 
-// Export app for serverless wrappers (e.g. Vercel) and testing
+// Export app for serverless wrappers and testing
 export { app };
 export default app;
 
-// In serverless environments (like Vercel), don't bind ports or start long-running crons
-if (!process.env.VERCEL) {
+// Start server when executed directly as entrypoint or when running in service mode
+const isDirectEntry = process.argv[1]?.endsWith('server.js') || Boolean(process.env.PORT && !process.env.VERCEL_SERVERLESS);
+if (isDirectEntry || !process.env.VERCEL) {
   // ----------------------------------------------------
   // Register Cron Jobs & Start Server
   // ----------------------------------------------------
