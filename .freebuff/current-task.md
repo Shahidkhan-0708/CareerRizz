@@ -49,7 +49,16 @@ Takes the platform from an assisted manual tool to a closed-loop 24/7 autonomous
 - [x] Resolved Vercel read-only filesystem crash and serverless function cold-start timeout in `src/services/ocr.service.js`, `src/routes/job-search.routes.js`, and `src/services/composio.service.js`.
 - [x] Guarded server start and cron scheduling against all serverless environments (`isServerless = Boolean(process.env.VERCEL || process.env.VERCEL_SERVERLESS || process.env.AWS_LAMBDA_FUNCTION_NAME)`).
 - [x] Fixed Vercel SPA routing in `vercel.json` and ensured `/signup` and `/login` map cleanly to `/index.html` while preserving API rewrites.
-- [ ] Ensure Supabase environment variables are configured in Vercel project settings (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`).
+- [x] Fixed winston logger creating `logs/` directory on Vercel's read-only filesystem (`ENOENT: mkdir 'logs'`).
+- [x] Cleared obsolete `services` framework preset on Vercel project `get-job.ai` via Vercel CLI (`--framework other`, `--build-command "npm run build"`, `--output-directory "f/dist"`).
+- [x] Deployed and verified live on production (`https://get-jobai.vercel.app`):
+  - Hero Landing (`/`): HTTP 200
+  - Sign-up Page (`/signup`): HTTP 200 (404 NOT_FOUND resolved)
+  - Login Page (`/login`): HTTP 200
+  - Dashboard (`/dashboard`): HTTP 200
+  - API Health (`/api/health`): HTTP 200 (FUNCTION_INVOCATION_FAILED resolved)
+  - Live Data API (`/api/campaigns`, `/api/dashboard/stats`): HTTP 200
+- [x] Verified Supabase environment variables configured in Vercel project settings (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`).
 - [ ] Configure production environment variables in Vercel project settings.
 - [ ] Apply migration `db/migrations/20240101001200_create_candidate_vault_table.sql` in Supabase SQL editor or via `supabase db push --linked`.
 - [ ] Connect Playwright headless fallback for complex multi-page Workday login portals.
