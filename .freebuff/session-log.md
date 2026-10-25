@@ -1,5 +1,21 @@
 # Session Log
 
+## 2026-10-26 — Vercel SPA 404 Routing & Serverless Function Crash Fixes
+
+### What happened
+
+1. **Serverless Cold-Start & Read-Only Filesystem Fixes**:
+   - Resolved `EROFS: read-only file system` fatal crash in `src/services/ocr.service.js` by targeting `/tmp/ocr` when on serverless environments and wrapping directory creation in try/catch.
+   - Converted heavy libraries (`tesseract.js`, `pdfjs-dist`, `@napi-rs/canvas`, `@composio/core`) to dynamic lazy imports so they do not execute during module evaluation on lambda cold-start.
+   - Refactored server entrypoint check in `src/server.js` using `isServerless` to strictly prevent `app.listen()` and background `node-cron` workers from starting in serverless environments.
+2. **SPA Routing & Catch-All Handler Fixes**:
+   - Replaced multi-service configuration in `vercel.json` with standard Vercel v2 routing: `/` routes to `/landing.html`, `/api` and `/api/(.*)` route to `/api/index.js`, `/auth` and `/auth/(.*)` route to `/api/index.js`, `/health` routes to `/api/index.js`, and `/(.*)` rewrites to `/index.html` for client-side React SPA routing (fixing the 404 on `/signup` and `/login`).
+   - Enhanced `api/index.js` and `api/[...path].js` to normalize `req.url` using `x-matched-path` when rewritten by Vercel.
+3. **Verification**:
+   - Syntax checked all modified backend files with `node --check` (0 errors).
+   - Ran `node test-verification.js` smoke tests (100% passed).
+   - Rebuilt full frontend with `npm run build` (tsc -b + vite build completed in 3.77s with 0 errors).
+
 ## 2026-10-25 — Vercel Monorepo Serverless Deployment Configuration (Option 1)
 
 ### What happened

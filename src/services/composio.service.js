@@ -1,4 +1,3 @@
-import { Composio } from '@composio/core';
 import { config } from '../config/env.js';
 
 const GMAIL_TOOLKIT = 'gmail';
@@ -18,9 +17,12 @@ function requireComposioKey() {
   }
 }
 
-function getComposioClient() {
+async function getComposioClient() {
   requireComposioKey();
-  client ||= new Composio();
+  if (!client) {
+    const { Composio } = await import('@composio/core');
+    client = new Composio();
+  }
   return client;
 }
 
@@ -33,7 +35,8 @@ function requireUserId(userId) {
 export async function createComposioSession(userId) {
   requireUserId(userId);
 
-  return getComposioClient().sessions.create(userId, {
+  const comp = await getComposioClient();
+  return comp.sessions.create(userId, {
     toolkits: [GMAIL_TOOLKIT],
     preload: { tools: [GMAIL_PROFILE_TOOL, GMAIL_FETCH_TOOL] },
     sandbox: { enable: false },
@@ -43,7 +46,8 @@ export async function createComposioSession(userId) {
 export async function createLinkedInSession(userId) {
   requireUserId(userId);
 
-  return getComposioClient().sessions.create(userId, {
+  const comp = await getComposioClient();
+  return comp.sessions.create(userId, {
     toolkits: [LINKEDIN_TOOLKIT],
     preload: { tools: [LINKEDIN_MY_INFO_TOOL, LINKEDIN_PERSON_TOOL] },
     sandbox: { enable: false },

@@ -9,9 +9,6 @@
 // Language data is downloaded by tesseract.js on first use (CDN, cached
 // locally afterwards). No API keys required.
 // ---------------------------------------------------------------------------
-import { createWorker } from 'tesseract.js';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { createCanvas } from '@napi-rs/canvas';
 import path from 'path';
 import fs from 'fs';
 import { createRequire } from 'module';
@@ -20,10 +17,38 @@ import { logger } from '../utils/logger.js';
 
 const require = createRequire(import.meta.url);
 
-// Cache tesseract's downloaded language/core files under node_modules/.cache so
-// they never land in the project root or git.
-const OCR_CACHE_DIR = path.join(process.cwd(), 'node_modules', '.cache', 'ocr');
-fs.mkdirSync(OCR_CACHE_DIR, { recursive: true });
+// Cache tesseract's downloaded language/core files under /tmp on serverless or node_modules/.cache locally
+const OCR_CACHE_DIR = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME
+  ? path.join('/tmp', 'ocr')
+  : path.join(process.cwd(), 'node_modules', '.cache', 'ocr');
+
+try {
+  fs.mkdirSync(OCR_CACHE_DIR, { recursive: true });
+} catch {
+  // Safe on read-only serverless filesystems
+}
+
+// ---------------------------------------------------------------------------
+// Lazy module loaders for heavy libraries (prevents serverless cold-start crash)
+// ---------------------------------------------------------------------------
+let tesseractModule = null;
+let pdfjsLibModule = null;
+let canvasModule = null;
+
+async function getTesseract() {
+  if (!tesseractModule) tesseractModule = await import('tesseract.js');
+  return tesseractModule;
+}
+
+async function getPdfJs() {
+  if (!pdfjsLibModule) pdfjsLibModule = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  return pdfjsLibModule;
+}
+
+async function getCanvas() {
+  if (!canvasModule) canvasModule = await import('@napi-rs/canvas');
+  return canvasModule;
+}
 
 // ---------------------------------------------------------------------------
 // Shared tesseract worker (lazy singleton; terminated when the process exits)
@@ -32,6 +57,7 @@ let workerPromise = null;
 
 async function getWorker() {
   if (!workerPromise) {
+    const { createWorker } = await getTesseract();
     workerPromise = createWorker('eng', 1, {
       logger: (m) => {
         if (m.status === 'recognizing text' && m.progress >= 1) {
@@ -58,24 +84,28 @@ export async function ocrImageBuffer(buffer) {
 // ---------------------------------------------------------------------------
 // Scanned PDF → render pages → OCR each page
 // ---------------------------------------------------------------------------
-const workerSrc = pathToFileURL(
-  require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs')
-).toString();
+function getWorkerSrc() {
+  return pathToFileURL(
+    require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs')
+  ).toString();
+}
 
-const standardFontDir = path.join(
-  path.dirname(require.resolve('pdfjs-dist/package.json')),
-  'standard_fonts'
-);
+function getStandardFontDir() {
+  return path.join(
+    path.dirname(require.resolve('pdfjs-dist/package.json')),
+    'standard_fonts'
+  );
+}
 
-function getDocumentParams(buffer) {
+function getDocumentParams(buffer, createCanvasFn) {
   return {
     data: new Uint8Array(buffer),
     useSystemFonts: true,
     isEvalSupported: false,
     useWorkerFetch: false,
-    standardFontDataUrl: pathToFileURL(standardFontDir + path.sep).toString(),
+    standardFontDataUrl: pathToFileURL(getStandardFontDir() + path.sep).toString(),
     canvasFactory: {
-      create: (width, height) => createCanvas(width, height),
+      create: (width, height) => createCanvasFn(width, height),
       reset: (canvas, width, height) => {
         canvas.width = width;
         canvas.height = height;
@@ -93,9 +123,11 @@ function getDocumentParams(buffer) {
  * i.e. not scanned). Returns per-page text joined with blank lines.
  */
 export async function extractPdfTextLayer(buffer) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+  const pdfjsLib = await getPdfJs();
+  const { createCanvas } = await getCanvas();
+  pdfjsLib.GlobalWorkerOptions.workerSrc = getWorkerSrc();
 
-  const loadingTask = pdfjsLib.getDocument(getDocumentParams(buffer));
+  const loadingTask = pdfjsLib.getDocument(getDocumentParams(buffer, createCanvas));
   const doc = await loadingTask.promise;
 
   try {
@@ -103,8 +135,6 @@ export async function extractPdfTextLayer(buffer) {
     for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
       const page = await doc.getPage(pageNum);
       const textContent = await page.getTextContent();
-      // Rebuild lines from item positions: text items carry no EOL markers, so
-      // group items whose baseline Y differs by more than a small tolerance.
       const lines = [];
       let currentLine = [];
       let lastY = null;
@@ -127,24 +157,24 @@ export async function extractPdfTextLayer(buffer) {
     }
     return pageTexts.join('\n\n');
   } finally {
-    // pdfjs-dist v6: destroy() lives on the loading task, not the document.
     await loadingTask.destroy();
   }
 }
 
 /** Render a scanned PDF to text via per-page OCR. */
 export async function ocrPdfBuffer(buffer) {
-  // pdfjs-dist needs its worker file; in Node this spins up a worker_thread.
-  pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+  const pdfjsLib = await getPdfJs();
+  const { createCanvas } = await getCanvas();
+  pdfjsLib.GlobalWorkerOptions.workerSrc = getWorkerSrc();
 
-  const loadingTask = pdfjsLib.getDocument(getDocumentParams(buffer));
+  const loadingTask = pdfjsLib.getDocument(getDocumentParams(buffer, createCanvas));
   const doc = await loadingTask.promise;
 
   try {
     const pageTexts = [];
     for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
       const page = await doc.getPage(pageNum);
-      const viewport = page.getViewport({ scale: 2 }); // 2x for better OCR accuracy
+      const viewport = page.getViewport({ scale: 2 });
       const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
       const ctx = canvas.getContext('2d');
 
@@ -161,7 +191,6 @@ export async function ocrPdfBuffer(buffer) {
     }
     return pageTexts.join('\n\n');
   } finally {
-    // pdfjs-dist v6: destroy() lives on the loading task, not the document.
     await loadingTask.destroy();
   }
 }

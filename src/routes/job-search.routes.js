@@ -1,6 +1,5 @@
 import express from 'express';
 import multer from 'multer';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { requireAuth } from '../middleware/supabase-auth.js';
 import { requireModule } from '../middleware/rbac.js';
 import { getSupabaseClient } from '../db/client.js';
@@ -356,6 +355,7 @@ jobSearchRouter.post('/resumes/upload', upload.single('resume'), async (req, res
       content = req.file.buffer.toString('utf-8');
     } else if (ext === '.pdf') {
       try {
+        const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
         const doc = await pdfjsLib.getDocument({ data: new Uint8Array(req.file.buffer) }).promise;
         const pageTexts = [];
         for (let i = 1; i <= doc.numPages; i++) {

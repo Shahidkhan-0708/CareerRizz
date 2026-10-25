@@ -75,7 +75,7 @@ app.use(express.static(staticRoot));
 // ----------------------------------------------------
 // Health Check Endpoint
 // ----------------------------------------------------
-app.get('/health', (req, res) => {
+app.get(['/health', '/api/health'], (req, res) => {
   res.status(200).json({
     status: 'ok',
     service: 'College Outreach Automation System V2',
@@ -343,9 +343,9 @@ app.post('/api/leads', requireAuth, async (req, res) => {
 export { app };
 export default app;
 
-// Start server when executed directly as entrypoint or when running in service mode
-const isDirectEntry = process.argv[1]?.endsWith('server.js') || Boolean(process.env.PORT && !process.env.VERCEL_SERVERLESS);
-if (isDirectEntry || !process.env.VERCEL) {
+// Start server when executed directly as entrypoint in a standalone Node.js environment
+const isServerless = Boolean(process.env.VERCEL || process.env.VERCEL_SERVERLESS || process.env.AWS_LAMBDA_FUNCTION_NAME);
+if (!isServerless) {
   // ----------------------------------------------------
   // Register Cron Jobs & Start Server
   // ----------------------------------------------------
