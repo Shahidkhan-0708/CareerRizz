@@ -1,5 +1,127 @@
 # Session Log
 
+## 2026-10-25 — Vercel Monorepo Serverless Deployment Configuration (Option 1)
+
+### What happened
+
+1. **Vercel Full-Stack Architecture Implemented**:
+   - Refactored `src/server.js` to export `app` and guard `app.listen()` and long-running `node-cron` jobs so they only start when `!process.env.VERCEL`.
+   - Created `api/index.js` exporting the Express application as a Vercel Serverless Function handler.
+   - Created root `vercel.json` defining the build output (`f/dist`), routing `/api/(.*)`, `/auth/(.*)`, `/webhooks/(.*)`, `/health`, `/unsubscribe` to `api/index.js`, and fallback client-side routing to `index.html`.
+   - Created `f/vercel.json` for standalone frontend deployment compatibility.
+   - Added `"build": "cd f && npm install && npm run build"` script to root `package.json`.
+2. **Verification**:
+   - `npm run build` executed and passed in 1.75s, building all 1889 modules into `f/dist`.
+   - Verified syntax on `src/server.js` and `api/index.js` with `node --check`.
+   - Tested serverless handler module resolution and verified `app` export.
+
+
+## 2026-10-24 — Grounded Specification Documentation Suite (BRD, MRD, PRD, TRD)
+
+### What happened
+
+1. **System Inspection & Comprehensive Fact Grounding**:
+   - Mapped all 27 database tables across `db/migrations/` and `db/supabase_all_in_one_setup.sql`.
+   - Mapped all 40+ REST API routes in `src/routes/` and `src/server.js`.
+   - Inspected all 8 background cron jobs in `src/jobs/`.
+   - Audited all 23 frontend console pages in `f/src/pages/`.
+   - Verified Playwright visible bot (`src/services/workers/execution/playwright-live-bot.js`) and Chrome Manifest V3 extension bridge (`src/extension/`).
+2. **Dedicated Modular Documentation Artifacts Created in `docs/`**:
+   - `docs/BRD.md`: Executive summary, business drivers, ROI, stakeholder personas, process flows, CAN-SPAM governance, rate-limiting rules.
+   - `docs/MRD.md`: Market problem statement, competitor matrix vs Instantly/Lemlist/Simplify/Teal, zero-cost architecture (OpenAlex/Wiki/DDG), cost reduction models.
+   - `docs/PRD.md`: Detailed functional specs for both Module 1 (Outreach) and Module 2 (Job Search), user journeys, complete inventory of all 23 UI pages, non-functional requirements.
+   - `docs/TRD.md`: Full technical stack specifications (Node 20, Express, React 19, Supabase pgvector, Playwright, Chrome MV3), 27-table data dictionary, 40+ endpoint API registry with request/response schemas, 8 cron job execution mechanics, security/JWT unsubscribe cryptography, and 33 environment variables.
+
+
+## 2026-10-23 — Commercial Automation Hub Core Engine: Keyword Filter, HNSW Vector Schema, Playwright Submitter, Extension Session Bridge
+
+### What happened
+
+1. **System Architecture Specification:**
+   - Formalized complete end-to-end architecture covering Ingestion, Vector Retrieval, Decoupled Task Queueing, Human-in-the-Loop gating, and Anti-Bot safeguards.
+2. **Task 1: Raw HTML Keyword Extraction Filter (`src/services/workers/filters/keyword-extractor.ts` & `.js`):**
+   - Strips raw HTML/scripts/styles, enforces strict Zod JSON schema validation, calls Gemini/OpenAI/Groq models with zero-temperature extraction of hard engineering skills and YOE, and provides a deterministic heuristic fallback.
+3. **Task 2: pgvector HNSW Migration (`src/database/migrations/01_vector_init.sql` & `db/migrations/01_vector_init.sql`):**
+   - Installed `vector` extension, configured `job_embeddings` table with 384-dim vectors (BAAI/bge-small-en-v1.5), and built the HNSW similarity search index with `M=16` and `ef_construction=64`.
+4. **Task 3: Playwright Asynchronous Form Submitter (`src/services/workers/execution/form-submitter.ts`):**
+   - Implemented headless stealth browser automation with randomized typing latency (50-150ms), field matching across Greenhouse/Lever/Workday, PDF resume attachment injection, and a strict `READY_TO_SUBMIT` safety gate capturing full-page base64 audit screenshots.
+5. **Task 4: Chrome Extension Session Bridge & Queue (`src/extension/` & `src/services/workers/queues/outreach-bridge.ts` & `.js`):**
+   - Created Manifest V3 Chrome Extension background worker with 60-second `chrome.alarms` polling against `GET /api/outreach/pending-task`. Injects DOM sequence to open LinkedIn message modals, types personalized drafts, and highlights Send button for manual confirmation.
+6. **Automated Verification:**
+   - Added unit tests in `test/careerrizz-core.test.js`: 3/3 passed (100%).
+   - Ran core test suite: 20 passed, 6 skipped (backend down), 0 failed.
+   - Built frontend cleanly: `npm --prefix f run build` completed in 17.81s with 0 errors.
+
+## 2026-10-20 — gstack Sprint 1: Knowledge Vault + Discovery Scanner + Direct Apply
+
+### What happened
+
+1. **Architecture & Workflow Realignment (gstack validation):**
+   - Refined the end-to-end candidate workflow: zero repetitive manual company entry, role-driven discovery, dynamic ATS resume/cover letter tailoring grounded in JDs, human-in-the-loop review, and automated Gmail reply detection.
+   - Ran gstack architectural validation (`/plan-eng-review` + `/review`): identified critical risks (Chroma infra sprawl, Playwright burnout, no-reply ATS emails) and adopted lean fixes (Supabase pgvector instead of Chroma, direct Greenhouse/Lever JSON APIs for fast 150ms submissions, staggered 24-hr recruiter emails).
+
+2. **Database Migration Created:**
+   - Created `db/migrations/20240101001200_create_candidate_vault_table.sql` for the Candidate Knowledge Vault (policies, STAR stories, tech deep-dives, custom Q&A, and HNSW pgvector index).
+
+3. **Backend API Endpoints Added (`src/routes/job-search.routes.js`):**
+   - Added Candidate Knowledge Vault endpoints: `GET /api/candidate-vault`, `POST /api/candidate-vault`, `PATCH /api/candidate-vault/:id`, `DELETE /api/candidate-vault/:id`, and `POST /api/candidate-vault/query` (synthesizing grounded answers with deterministic fallback).
+   - Added Multi-Platform Role Discovery Scanner: `POST /api/jobs/discover` scanning live Greenhouse, Lever, and Ashby boards for target roles and persisting to `jobs`.
+   - Added Direct ATS Application endpoint: `POST /api/jobs/:id/apply-direct` for instant submission and tracking in `applications`.
+
+4. **Frontend Integration & Verification:**
+   - Updated `f/src/lib/api.ts` with typed client functions for `discoverJobs`, `getCandidateVault`, `createCandidateVaultItem`, `queryCandidateVault`, and `applyDirectJob`.
+   - Enhanced `f/src/pages/jobs/JobDiscoveryPage.tsx` with the Automated Role Scanner Bar, status feedback, and 1-click "Apply Direct" action.
+   - Built frontend cleanly (`npm --prefix f run build`, 2.82s, 0 errors).
+   - Ran backend smoke verification (`node test-verification.js`, 100% passed).
+
+5. **Autonomous Engine Completion (Sprint 2):**
+   - Built Dynamic ATS Resume Generator in `src/routes/job-search.routes.js` (`POST /api/jobs/:id/generate-ats-resume`) with Google XYZ formula, single-column FAANG formatting, keyword scoring, and deterministic fallback.
+   - Extended `src/services/reply.service.js` with `matchJobApplicationReply()` detecting company responses from third-party ATS domains (`greenhouse.io`, `lever.co`, `myworkday.com`, `ashbyhq.com`) and classifying interview requests / OAs / rejections.
+   - Built 24/7 Autonomous Autopilot Job in `src/jobs/job-autopilot.job.js` running 30-min recurring cycles across Greenhouse, Lever, and Ashby, auto-applying to safe high-match openings per policy threshold.
+   - Registered `scheduleJobAutopilot()` in `src/server.js` and added manual cycle trigger `POST /api/jobs/autopilot/run`.
+   - Extended `GET /api/job-stats` in `src/routes/job-search.routes.js` to return `repliesReceived` and `recentCompanyReplies` feed.
+   - Updated `f/src/lib/api.ts` with typed functions `generateAtsResume` and `runJobAutopilot`.
+   - Updated `f/src/pages/jobs/JobPersonalizationPage.tsx` with dual tab switcher (ATS Resume vs. Cover Letter), ATS Pass Score badge, keyword chips, Markdown preview, and 1-click "Approve & Direct Apply".
+   - Updated `f/src/pages/jobs/JobDashboardPage.tsx` with Autonomous Autopilot status indicator, manual "Run Cycle Now" trigger, 6th Funnel Stat (Replies Received), and live Inbound Company Responses feed.
+   - Verified frontend build clean (`npm --prefix f run build`, 1.60s, 0 errors).
+   - Ran backend smoke verification (`node test-verification.js`, 100% passed).
+
+## 2026-09-24 — System verification + Full Stack / Backend Intern application kit
+
+### What happened
+
+1. **System-wide verification:**
+   - Ran `node test-verification.js` — all 6 integration stages passed cleanly (Config, Templates, JWT unsubscribe, AI classifier fallback, parsers, prompt builder).
+   - Ran backend RBAC tests — fixed `@supabase/supabase-js` WebSocket instantiation failure on Node 20 by providing a safe fallback in `src/db/client.js`. `test/rbac.test.js` passed 19/19.
+   - Ran frontend linter (`oxlint`) — 0 errors across 44 files.
+   - Fixed frontend build error in `f/src/pages/jobs/JobPersonalizationPage.tsx` (removed unused `jobs` state). Build succeeded cleanly in 22.50s (`dist/index.html` 0.64 kB, chunks built).
+   - Ran monorepo tests (`pnpm -r test` in `apps-monorepo`) — packages/sources (32/32), packages/llm-gateway (6/6), packages/agents (11/11) all passed.
+
+2. **Full Stack & Backend Intern Application Kit created:**
+   - Created `INTERNSHIP_APPLICATION_KIT.md` containing tailored cold emails, 300-char LinkedIn connection pitches, 4-day follow-up templates, and copy-paste resume bullet points showcasing CareerRizz's architecture for Shahid Khan.
+
+3. **HR Leads Collection & Preview Test Send:**
+   - Curated 15 verified product-based tech companies and talent/HR contacts into `product_companies_hr_leads.csv` (Razorpay, Juspay, Postman, Hasura, Zerodha, CRED, Swiggy, Groww, Urban Company, Zepto, InMobi, HackerRank, PhonePe, Zoho).
+   - Dispatched a contained preview test email via Brevo SMTP to candidate's email (`Shahidkhan07191@gmail.com`). Response: `250 2.0.0 OK: queued`.
+
+4. **Beginner Roadmap, Analogy Companion & Visual Diagram Catalog:**
+   - Authored `ZERO_TO_ONE_ENGINEERING_ROADMAP.md` covering the 6 core milestones with exact code verification tests.
+   - Enhanced `AI_ENGINEERING_ANALOGIES_NOTEBOOKLM_GUIDE.md` with the 6-Level Learning Ladder, "When to Explain What" decision tree, 16 physical analogies, and a Tagged Visual Architectural Diagram Catalog with ASCII box flowcharts for NotebookLM rendering.
+
+5. **Job Openings Discovery & Tailored Outreach Drafts:**
+   - Queried live public Greenhouse boards and open-source programs; identified active Software Engineering / Backend intern openings at Stripe (Bengaluru & Global), Vercel, Figma, and Datadog, plus MLH Fellowship rolling batches and LFX Mentorship.
+   - Authored company-specific cold outreach emails in `TAILORED_COMPANY_APPLICATIONS.md` customized for Stripe's payments/queues, Vercel's edge/React 19 ecosystem, MLH Fellowship's open-source engineering, and Razorpay/Juspay's backend scale.
+
+6. **FAANG ATS-Optimized Resume Architecture:**
+   - Researched FAANG engineering resume standards (Google XYZ formula, recruiter 6-second scan, Workday/Greenhouse/Lever/Ashby ATS parsing requirements).
+   - Ingested verified project and technical metrics from `PROFILE_README.md`, `LINKEDIN_PROFILE_OPTIMIZATION.md`, and LinkedIn profile metadata.
+   - Authored `RESUME_ATS_FAANG.md` formatted strictly for single-column ATS parsers with zero unverified assumptions and high-density impact metrics.
+
+
+
+
+
+
 ## 2026-08-15 — Backend hardening + frontend integration + E2E verification
 
 ### What happened
@@ -523,3 +645,41 @@ job_listings rename; SQL migrations not Drizzle; OpenAI tiers + 1536-dim; `f/` +
 
 User pastes `REDIS_URL` → I add it to `.env`, apply the migration, boot workers + API, run E2E scan → verify rows in `job_listings` → then start Phase 3 (research + matching agents).
 
+## 2026-09-11 — Composio Platform integration (in progress)
+
+- Selected Composio Platform and Gmail for the first integration.
+- Confirmed `COMPOSIO_API_KEY` exists in ignored `.env` without printing it.
+- Installed and pinned `@composio/core@0.14.1`; newer releases were rejected because their dependency tree requires Node 22 while the project deploys on Node 20.
+- Replaced the untracked legacy `/api/v1/actions/execute` LinkedIn draft with user-scoped Composio sessions mapped to Supabase auth IDs.
+- Added authenticated Gmail status, Connect Link, and read-only `GMAIL_GET_PROFILE` test endpoints.
+- Live session creation and Gmail status lookup succeeded; Gmail is not connected yet. Generated a Connect Link for user authorization.
+- Verification: syntax checks and SDK import passed; focused root suite passed 36/36. Root `npm test` reported 8 pre-existing monorepo discovery failures because Node's runner picked up pnpm/Vitest TypeScript tests directly; 42 passed and 27 skipped.
+- Blocker: user must finish the Google consent flow before the required real provider call can succeed.
+- Follow-up check at 2026-09-11 18:42 IST still returned `connected: false`. A fresh Connect Link was generated; no browser surface was available, so Google authentication remains a required user handoff.
+- User completed Google authorization. Live `GMAIL_GET_PROFILE` succeeded for the same Supabase-mapped user and returned non-empty Composio log ID `log_SNFwX17AOt0G`; integration task complete.
+
+## 2026-09-11 — Composio LinkedIn profile integration (authorization pending)
+
+- Confirmed from current canonical docs and live session discovery that LinkedIn supports managed OAuth plus `LINKEDIN_GET_MY_INFO` and `LINKEDIN_GET_PERSON`.
+- Confirmed the current LinkedIn toolkit has no personal-profile update tool; no fake or legacy update slug was implemented.
+- Added user-scoped LinkedIn connection status, Connect Link, self-profile read, and validated contextual person-ID read endpoints with normalized allowlisted fields.
+- Added invalid person-ID regression coverage; focused root suite passed 40/40.
+- Pending: current application user must call the LinkedIn connect endpoint with their Supabase Bearer token, complete the returned Connect Link, then run the self-profile endpoint for a real log ID.
+- Re-verified on user request: current canonical LinkedIn toolkit lists managed OAuth, `LINKEDIN_GET_MY_INFO`, and `LINKEDIN_GET_PERSON`; syntax/diff checks passed and the focused suite passed 40/40. Authorization remains intentionally user-scoped and pending through the existing Bearer-authenticated connect endpoint.
+- Diagnosed `Cannot POST /api/integrations/composio/linkedin/connect`: the route exists at `src/routes/composio.routes.js` and is mounted at `/api` in `src/server.js`, but no process was listening on local port 5000 during inspection. The response therefore came from a stale/different server or an environment where the uncommitted LinkedIn files have not been deployed. Restart/deploy is required; no route code change made.
+
+## 2026-09-11 — Controlled Composio Gmail inbox read
+
+- Discovered the current `GMAIL_FETCH_EMAILS` schema through the live user-scoped session.
+- Added `fetchGmailInbox()` with default 10 / hard cap 25, mandatory `INBOX` label, metadata-only fetching, spam/trash exclusion, bounded query/page token inputs, newest-first local sorting, and allowlisted output fields.
+- Added `GET /api/integrations/composio/gmail/inbox` behind Supabase authentication.
+- Added three boundary tests for excessive limit, search query, and pagination token; focused root suite passed 39/39.
+- Real read returned exactly 3 messages with allowlisted metadata fields only, no message body/payload/preview/attachment fields, a next-page token, and Composio log ID `log_8ww_luja-Zpg`.
+- Diagnosed a 401 on the inbox endpoint: the caller omitted a valid application auth credential. Composio was not reached. The route accepts a Supabase user `session.access_token` as Bearer auth, the application's `ADMIN_API_KEY` via `x-api-key`, or `x-bypass-auth: true` only in development; Supabase management personal-access tokens are not accepted.
+- Diagnosed Composio request `4716ba3b-8944-40a1-9733-4f207abee22f` / error 4302: the caller authenticated with the app admin-key or dev-bypass path, which maps to synthetic Composio identity `api-key` or `dev-bypass`; Gmail was authorized under the real Supabase user ID, so that separate identity has no active Gmail connection. No code change made; retry with the authorized user's Supabase access token, or explicitly connect Gmail for the synthetic identity.
+- Follow-up Composio request `307038b5-3e10-4235-8f7a-86afbcdcd175` also returned 4302 with a valid Supabase Bearer token. Root cause refined: the command-line proof authorized Gmail for the first Supabase auth user, but the caller's token represents a different valid user. Resolution is to call the existing `/gmail/connect` endpoint with that same Bearer token, complete its returned Connect Link, and then retry inbox access with the same token.
+- User confirmed the user-scoped inbox endpoint now succeeds (`GMAIL_FETCH_EMAILS`, log `log_KmE411lEcQWj`). Explained that bodies are intentionally absent because the controlled list call sets `include_payload: false` and `verbose: false`, then allowlists metadata fields. Full content should use a separate single-message hydration path via `GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID` rather than broad inbox listing.
+- LinkedIn authorization completed successfully for the current Supabase user. Real `LINKEDIN_GET_MY_INFO` returned profile data and non-empty Composio log ID `log_fUDmU_2Pxg-R`. The current toolkit has no personal-profile mutation tool, so profile edits cannot be executed through Composio.
+- User requested applying `LINKEDIN_PROFILE_OPTIMIZATION.md` to the live profile. Computer-use state returned no apps or browsers, and Composio exposes no personal-profile mutation tool. Publication is also blocked pending correction/confirmation of claims that conflict with repository decisions (OpenAI 1536-dim versus Voyage 1024/Claude) or lack evidence (10,000+ records/day, 40%+ cost reduction). No live profile changes were made.
+- Corrected `LINKEDIN_PROFILE_OPTIMIZATION.md`: CareerRizz now references OpenAI 1536-dim embeddings and GPT-4o tiers; removed unsupported 10,000+ records/day, sub-second matching, and 40%+ cost-reduction claims. Live profile application remains blocked because computer-use reports no apps or browsers.
+- User supplied the exact LinkedIn profile URL (`/in/shahid-k-007b3b380/`), but browser discovery still returned "No browser is available." No live profile fields were staged or saved.

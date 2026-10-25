@@ -124,9 +124,20 @@ export async function processIncomingReplies() {
       }
     }
 
-    // If still no matching outreach record, skip without permanently blacklisting in processed_gmail_messages
+    // If still no matching outreach record, check for Job Application / ATS / Recruiter replies
     if (!outreachRecord) {
-      logger.debug(`No matching outreach record found for reply from ${reply.fromEmail} (Subject: ${reply.subject}). Skipping.`);
+      try {
+        const matchedJobOrRecruiter = await matchJobApplicationReply(reply);
+        if (matchedJobOrRecruiter) {
+          await markGmailMessageProcessed(reply.id);
+          processedCount++;
+          continue;
+        }
+      } catch (jobErr) {
+        logger.warn(`Error checking job application reply for ${reply.fromEmail}:`, { error: jobErr.message });
+      }
+
+      logger.debug(`No matching outreach or job record found for reply from ${reply.fromEmail} (Subject: ${reply.subject}). Skipping.`);
       skippedCount++;
       continue;
     }
@@ -183,4 +194,141 @@ export async function processIncomingReplies() {
 
   logger.info(`Reply detection job complete. Processed: ${processedCount}, Skipped: ${skippedCount}`);
   return { fetched: recentReplies.length, processed: processedCount, skipped: skippedCount };
+}
+
+/**
+ * Matches inbound messages against recruiter outreach, job applications,
+ * and third-party ATS domains (Greenhouse, Lever, Workday, Ashby).
+ */
+async function matchJobApplicationReply(reply) {
+  const supabase = getSupabaseClient();
+  const fromEmail = (reply.fromEmail || '').toLowerCase();
+  const subject = (reply.subject || '').toLowerCase();
+  const body = (reply.body || '').toLowerCase();
+  const now = new Date().toISOString();
+
+  // 1. Check Recruiter Outreach by email
+  if (fromEmail) {
+    const { data: recruiters } = await supabase
+      .from('recruiter_outreach')
+      .select('*, jobs(*)')
+      .eq('recruiter_email', fromEmail)
+      .limit(1);
+
+    if (recruiters && recruiters.length > 0) {
+      const rec = recruiters[0];
+      logger.info(`Matched reply to recruiter outreach ${rec.id} (${rec.recruiter_name} @ ${rec.company})`);
+      
+      const classification = await classifyReply(reply.body || reply.subject || 'Recruiter response');
+
+      await supabase
+        .from('recruiter_outreach')
+        .update({
+          status: 'replied',
+          reply_received_at: now,
+          updated_at: now,
+        })
+        .eq('id', rec.id);
+
+      if (rec.job_id) {
+        await supabase
+          .from('jobs')
+          .update({
+            status: 'interviewing',
+            notes: `[Recruiter Reply ${now.slice(0, 10)}] ${classification.category}: ${classification.summary}`,
+            updated_at: now,
+          })
+          .eq('id', rec.job_id);
+      }
+
+      return true;
+    }
+  }
+
+  // 2. Check ATS Provider Domains or Direct Company Replies
+  const atsDomains = ['greenhouse.io', 'lever.co', 'myworkday.com', 'workday.com', 'ashbyhq.com', 'smartrecruiters.com', 'icims.com'];
+  const isAtsEmail = atsDomains.some(d => fromEmail.includes(d));
+
+  const { data: appliedJobs } = await supabase
+    .from('jobs')
+    .select('*, applications(*)')
+    .in('status', ['applied', 'interviewing', 'discovered', 'researching', 'applying'])
+    .order('updated_at', { ascending: false })
+    .limit(50);
+
+  if (!appliedJobs || appliedJobs.length === 0) return false;
+
+  let matchedJob = null;
+  for (const job of appliedJobs) {
+    const compLower = (job.company || '').toLowerCase().trim();
+    if (!compLower || compLower.length < 3) continue;
+
+    if (subject.includes(compLower) || (isAtsEmail && body.includes(compLower)) || fromEmail.includes(compLower)) {
+      matchedJob = job;
+      break;
+    }
+  }
+
+  if (!matchedJob) return false;
+
+  logger.info(`Matched inbound reply to job ${matchedJob.id} (${matchedJob.title} @ ${matchedJob.company})`);
+
+  const classification = await classifyReply(reply.body || reply.subject || `Inbound message from ${matchedJob.company}`);
+
+  let newAppStatus = 'pending_response';
+  let newJobStatus = matchedJob.status;
+
+  const interviewSignals = ['interview', 'schedule', 'calendly.com', 'meet.google.com', 'zoom.us', 'availability', 'chat with our team', 'invitation to interview'];
+  const oaSignals = ['hackerrank', 'codesignal', 'assessment', 'coding challenge', 'take-home', 'online test'];
+  const rejectionSignals = ['unfortunately', 'not moving forward', 'pursuing other candidates', 'not selected', 'other applicants', 'impressed with your qualifications, but'];
+
+  const combinedText = `${subject} ${body}`;
+
+  if (interviewSignals.some(s => combinedText.includes(s)) || classification.category === 'MEETING_REQUEST') {
+    newAppStatus = 'interview';
+    newJobStatus = 'interviewing';
+  } else if (oaSignals.some(s => combinedText.includes(s))) {
+    newAppStatus = 'technical_round';
+    newJobStatus = 'interviewing';
+  } else if (rejectionSignals.some(s => combinedText.includes(s)) || classification.category === 'NOT_INTERESTED') {
+    newAppStatus = 'rejected';
+    newJobStatus = 'rejected';
+  }
+
+  const existingApp = matchedJob.applications?.[0];
+  const appNote = `[Gmail Reply ${now.slice(0, 10)}] Subject: "${reply.subject}". Category: ${classification.category}. ${classification.summary}`;
+
+  if (existingApp) {
+    await supabase
+      .from('applications')
+      .update({
+        status: newAppStatus,
+        notes: existingApp.notes ? `${existingApp.notes}\n\n${appNote}` : appNote,
+        updated_at: now,
+      })
+      .eq('id', existingApp.id);
+  } else {
+    await supabase
+      .from('applications')
+      .insert({
+        user_id: matchedJob.user_id,
+        job_id: matchedJob.id,
+        status: newAppStatus,
+        notes: appNote,
+        applied_at: now,
+      });
+  }
+
+  const jobNote = `[Company Reply ${now.slice(0, 10)}] ${newAppStatus.toUpperCase()} - ${reply.subject}`;
+  await supabase
+    .from('jobs')
+    .update({
+      status: newJobStatus,
+      notes: matchedJob.notes ? `${matchedJob.notes}\n\n${jobNote}` : jobNote,
+      updated_at: now,
+    })
+    .eq('id', matchedJob.id);
+
+  logger.info(`Successfully processed company reply for ${matchedJob.company}. Status updated to: ${newJobStatus}/${newAppStatus}`);
+  return true;
 }

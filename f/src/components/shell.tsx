@@ -19,6 +19,7 @@ import {
   CalendarCheck,
   BarChart3,
   RefreshCw,
+  Database,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useApp } from '@/lib/AppContext'
@@ -45,6 +46,7 @@ const OUTREACH_NAV: NavItem[] = [
 
 const JOB_SEARCH_NAV: NavItem[] = [
   { to: '/jobs/dashboard', label: 'Dashboard', icon: BarChart3, module: 'job_search' },
+  { to: '/jobs/vault', label: 'Knowledge Vault', icon: Database, module: 'job_search' },
   { to: '/jobs/discovery', label: 'Job Discovery', icon: Briefcase, module: 'job_search' },
   { to: '/jobs/research', label: 'Job Research', icon: SearchCheck, module: 'job_search' },
   { to: '/jobs/resume', label: 'Resume Match', icon: FileText, module: 'job_search' },

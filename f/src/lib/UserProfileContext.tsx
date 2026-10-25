@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 import { useAuth } from './AuthContext'
+import { supabase } from './supabase'
 
 export type ModuleName = 'outreach' | 'job_search'
 export type WorkspaceName = 'outreach' | 'job_search'
@@ -21,12 +22,12 @@ interface UserProfileState {
 
 const UserProfileContext = createContext<UserProfileState | undefined>(undefined)
 
-const supabaseConfigured = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
-
-// Default profile when backend is unreachable — full access in dev, limited in prod.
-const DEFAULT_PROFILE: UserProfile = supabaseConfigured
-  ? { role: 'college_operator', enabled_modules: ['outreach'], active_workspace: 'outreach' }
-  : { role: 'owner', enabled_modules: ['outreach', 'job_search'], active_workspace: 'outreach' }
+// Default profile when backend is unreachable — default to owner access with both modules enabled.
+const DEFAULT_PROFILE: UserProfile = {
+  role: 'owner',
+  enabled_modules: ['outreach', 'job_search'],
+  active_workspace: 'outreach',
+}
 
 export function UserProfileProvider({ children }: { children: ReactNode }) {
   const { user, getAccessToken } = useAuth()
@@ -53,7 +54,24 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
       const res = await fetch('/api/user/profile', { headers })
 
       if (!res.ok) {
-        // Fallback: try the auth endpoint
+        // Fallback 1: try direct Supabase query
+        try {
+          const { data: directProfile } = await supabase
+            .from('user_profiles')
+            .select('role, enabled_modules, active_workspace')
+            .eq('user_id', user.id)
+            .maybeSingle()
+
+          if (directProfile) {
+            setProfile(directProfile as UserProfile)
+            setError(null)
+            return
+          }
+        } catch {
+          // Fall through to auth endpoint
+        }
+
+        // Fallback 2: try the auth endpoint
         try {
           const fallback = await fetch('/auth/profile', {
             headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -74,7 +92,22 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
         setError(null)
       }
     } catch (err) {
-      console.warn('Failed to fetch user profile:', err)
+      console.warn('Failed to fetch user profile, checking Supabase directly:', err)
+      try {
+        const { data: directProfile } = await supabase
+          .from('user_profiles')
+          .select('role, enabled_modules, active_workspace')
+          .eq('user_id', user.id)
+          .maybeSingle()
+
+        if (directProfile) {
+          setProfile(directProfile as UserProfile)
+          setError(null)
+          return
+        }
+      } catch {
+        // use default profile
+      }
       setProfile(DEFAULT_PROFILE)
       setError((err as Error).message)
     } finally {

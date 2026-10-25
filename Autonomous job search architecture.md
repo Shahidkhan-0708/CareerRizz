@@ -711,7 +711,7 @@ Ship Phase 2 completely — "a reliable daily list of newly discovered jobs, no 
 | Incorrect info auto-submitted on an application | Reputational/legal harm to the user | Policy engine hard-blocks sensitive fields; default action is `require_approval`; full audit trail |
 | Runaway LLM spend | Unexpected bill | Per-candidate daily budget cap enforced pre-call; model routing by task tier; circuit breaker on budget hit |
 | ToS/legal exposure from scraping | Account bans, legal risk | Official-API-first strategy; compliance table maintained per source; legal review before adding any new source |
-| Duplicate applications submitted | Embarrassment with an employer | `canonical_hash` dedup plus an application-exists check before every submit |
+| Duplicate applications submitted | Embarrassment with an employer | `canonica_hash` dedup plus an application-exists check before every submit |
 | Queue backlog during traffic spikes | Delayed discovery/matching | Autoscale workers on queue depth; dead-letter queue + bounded retries |
 
 ---

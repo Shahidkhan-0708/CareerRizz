@@ -36,6 +36,7 @@ const ApplicationsPage = lazy(() => import('@/pages/jobs/ApplicationsPage').then
 const RecruiterOutreachPage = lazy(() => import('@/pages/jobs/RecruiterOutreachPage').then(m => ({ default: m.RecruiterOutreachPage })))
 const FollowUpsPage = lazy(() => import('@/pages/jobs/FollowUpsPage').then(m => ({ default: m.FollowUpsPage })))
 const JobTrackingPage = lazy(() => import('@/pages/jobs/JobTrackingPage').then(m => ({ default: m.JobTrackingPage })))
+const CandidateVaultPage = lazy(() => import('@/pages/jobs/CandidateVaultPage').then(m => ({ default: m.CandidateVaultPage })))
 
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -88,6 +89,7 @@ function App() {
       <Route path="/jobs/recruiter" element={<AuthGuard><UserProfileProvider><AppShell><AnimatedPage><Suspense fallback={<LoadingState label="Loading…" />}><ModuleGuard module="job_search"><RecruiterOutreachPage /></ModuleGuard></Suspense></AnimatedPage></AppShell></UserProfileProvider></AuthGuard>} />
       <Route path="/jobs/follow-ups" element={<AuthGuard><UserProfileProvider><AppShell><AnimatedPage><Suspense fallback={<LoadingState label="Loading…" />}><ModuleGuard module="job_search"><FollowUpsPage /></ModuleGuard></Suspense></AnimatedPage></AppShell></UserProfileProvider></AuthGuard>} />
       <Route path="/jobs/tracking" element={<AuthGuard><UserProfileProvider><AppShell><AnimatedPage><Suspense fallback={<LoadingState label="Loading…" />}><ModuleGuard module="job_search"><JobTrackingPage /></ModuleGuard></Suspense></AnimatedPage></AppShell></UserProfileProvider></AuthGuard>} />
+      <Route path="/jobs/vault" element={<AuthGuard><UserProfileProvider><AppShell><AnimatedPage><Suspense fallback={<LoadingState label="Loading…" />}><ModuleGuard module="job_search"><CandidateVaultPage /></ModuleGuard></Suspense></AnimatedPage></AppShell></UserProfileProvider></AuthGuard>} />
 
       {/* Root redirects to dashboard (which will redirect to /login if not authed) */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

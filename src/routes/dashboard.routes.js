@@ -33,6 +33,20 @@ dashboardRouter.get('/user/profile', requireAuth, attachUserProfile, async (req,
   }
 });
 
+// GET /api/outreach/pending-task — Poll next pending task for Chrome Extension Bridge
+dashboardRouter.get('/outreach/pending-task', requireAuth, async (req, res) => {
+  try {
+    const { getNextPendingOutreachTask } = await import('../services/workers/queues/outreach-bridge.js');
+    const task = await getNextPendingOutreachTask();
+    if (!task) {
+      return res.status(204).send();
+    }
+    return res.json(task);
+  } catch (err) {
+    fail(res, err, 'Error polling pending outreach task');
+  }
+});
+
 // PUT /api/user/workspace — switch active workspace
 dashboardRouter.put('/user/workspace', requireAuth, async (req, res) => {
   try {

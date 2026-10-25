@@ -34,6 +34,7 @@ import { personalizationRouter } from './routes/personalization.routes.js';
 import { dashboardRouter } from './routes/dashboard.routes.js';
 import { alumniRouter } from './routes/alumni.routes.js';
 import { jobSearchRouter } from './routes/job-search.routes.js';
+import { composioRouter } from './routes/composio.routes.js';
 
 // Scheduled Jobs
 import { scheduleOutreachJob } from './jobs/send-outreach.job.js';
@@ -43,6 +44,7 @@ import { scheduleAirtableSyncJob } from './jobs/airtable-sync.job.js';
 import { scheduleCleanupStaleClaimsJob } from './jobs/cleanup-stale-claims.job.js';
 import { scheduleImportJob } from './jobs/import.job.js';
 import { schedulePersonalizationJob } from './jobs/personalization.job.js';
+import { scheduleJobAutopilot } from './jobs/job-autopilot.job.js';
 
 const app = express();
 app.use(express.json());
@@ -178,6 +180,9 @@ app.use('/api', requireModule('outreach'), importRouter);
 app.use('/api', requireModule('outreach'), personalizationRouter);
 app.use('/api', requireModule('outreach'), dashboardRouter);
 app.use('/api', requireModule('outreach'), alumniRouter);
+
+// User-scoped third-party connections shared by both workspaces.
+app.use('/api', composioRouter);
 
 // Job Search module — gated by requireModule('job_search')
 app.use('/api', jobSearchRouter);
@@ -333,32 +338,40 @@ app.post('/api/leads', requireAuth, async (req, res) => {
   }
 });
 
-// ----------------------------------------------------
-// Register Cron Jobs & Start Server
-// ----------------------------------------------------
-scheduleOutreachJob();
-scheduleFollowUpJob();
-scheduleReplyCheckJob();
-scheduleAirtableSyncJob();
-scheduleCleanupStaleClaimsJob();
-scheduleImportJob();
-schedulePersonalizationJob();
+// Export app for serverless wrappers (e.g. Vercel) and testing
+export { app };
+export default app;
 
-if (config.env === 'production') {
-  const usingDefaults = [];
-  if (config.security.adminApiKey === 'dev_admin_key_123') usingDefaults.push('ADMIN_API_KEY');
-  if (config.security.unsubscribeJwtSecret === 'super_secret_unsubscribe_jwt_key') usingDefaults.push('UNSUBSCRIBE_JWT_SECRET');
-  if (config.security.webhookSecret === 'webhook_secret_key') usingDefaults.push('WEBHOOK_SECRET');
-  if (usingDefaults.length > 0) {
-    logger.warn(`SECURITY: production is running with default secrets (${usingDefaults.join(', ')}). Set strong random values in .env.`);
+// In serverless environments (like Vercel), don't bind ports or start long-running crons
+if (!process.env.VERCEL) {
+  // ----------------------------------------------------
+  // Register Cron Jobs & Start Server
+  // ----------------------------------------------------
+  scheduleOutreachJob();
+  scheduleFollowUpJob();
+  scheduleReplyCheckJob();
+  scheduleAirtableSyncJob();
+  scheduleCleanupStaleClaimsJob();
+  scheduleImportJob();
+  schedulePersonalizationJob();
+  scheduleJobAutopilot();
+
+  if (config.env === 'production') {
+    const usingDefaults = [];
+    if (config.security.adminApiKey === 'dev_admin_key_123') usingDefaults.push('ADMIN_API_KEY');
+    if (config.security.unsubscribeJwtSecret === 'super_secret_unsubscribe_jwt_key') usingDefaults.push('UNSUBSCRIBE_JWT_SECRET');
+    if (config.security.webhookSecret === 'webhook_secret_key') usingDefaults.push('WEBHOOK_SECRET');
+    if (usingDefaults.length > 0) {
+      logger.warn(`SECURITY: production is running with default secrets (${usingDefaults.join(', ')}). Set strong random values in .env.`);
+    }
   }
-}
 
-app.listen(config.port, '0.0.0.0', () => {
-  logger.info(`=======================================================`);
-  logger.info(`🚀 Outreach Automation Backend V2 running on port ${config.port}`);
-  logger.info(`Environment: ${config.env}`);
-  logger.info(`Health check: ${config.baseUrl}/health`);
-  logger.info(`Google OAuth URL: ${config.baseUrl}/auth/google`);
-  logger.info(`=======================================================`);
-});
+  app.listen(config.port, '0.0.0.0', () => {
+    logger.info(`=======================================================`);
+    logger.info(`🚀 Outreach Automation Backend V2 running on port ${config.port}`);
+    logger.info(`Environment: ${config.env}`);
+    logger.info(`Health check: ${config.baseUrl}/health`);
+    logger.info(`Google OAuth URL: ${config.baseUrl}/auth/google`);
+    logger.info(`=======================================================`);
+  });
+}

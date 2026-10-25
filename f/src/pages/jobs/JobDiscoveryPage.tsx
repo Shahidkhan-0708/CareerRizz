@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Briefcase, ExternalLink, Plus, Trash2, Search, ChevronDown } from 'lucide-react'
+import { Briefcase, ExternalLink, Plus, Trash2, Search, ChevronDown, Sparkles, Loader2, Send, Bot } from 'lucide-react'
 import { RiseIn } from '@/components/motion'
 import { Card, LoadingState } from '@/components/ui'
-import { getJobs, createJob, updateJob, deleteJob, researchJob, type Job } from '@/lib/api'
+import { getJobs, createJob, updateJob, deleteJob, researchJob, discoverJobs, applyDirectJob, applyLiveJob, type Job } from '@/lib/api'
 
 // Note: getAccessToken from useAuth is available but not needed here — api.ts handles auth tokens automatically
 
@@ -73,6 +73,27 @@ export function JobDiscoveryPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [filter, setFilter] = useState('')
   const [researchingId, setResearchingId] = useState<string | null>(null)
+  const [applyingId, setApplyingId] = useState<string | null>(null)
+  const [liveApplyingId, setLiveApplyingId] = useState<string | null>(null)
+
+  const handleApplyLive = async (job: Job) => {
+    setLiveApplyingId(job.id)
+    try {
+      const res = await applyLiveJob(job.id)
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'applied' } : j))
+      alert(res.message || 'Playwright live browser launched on your desktop!')
+    } catch (err: any) {
+      alert(err.message || 'Failed to launch live Playwright bot')
+    } finally {
+      setLiveApplyingId(null)
+    }
+  }
+
+  // Automated discovery bar state
+  const [scanRole, setScanRole] = useState('')
+  const [scanLocation, setScanLocation] = useState('')
+  const [scanning, setScanning] = useState(false)
+  const [scanFeedback, setScanFeedback] = useState<string | null>(null)
 
   const fetchJobs = useCallback(async () => {
     try {
@@ -83,6 +104,40 @@ export function JobDiscoveryPage() {
   }, [])
 
   useEffect(() => { fetchJobs() }, [fetchJobs])
+
+  const handleScanDiscovery = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!scanRole.trim()) return
+    setScanning(true)
+    setScanFeedback(null)
+    try {
+      const result = await discoverJobs({
+        role: scanRole.trim(),
+        location: scanLocation.trim() || undefined,
+      })
+      setScanFeedback(`Discovered ${result.found} matching openings across Greenhouse, Lever & Ashby (${result.saved} newly saved).`)
+      await fetchJobs()
+    } catch (err: any) {
+      setScanFeedback(err.message || 'Discovery scan failed')
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  const handleApplyDirect = async (job: Job) => {
+    if (job.url) {
+      window.open(job.url, '_blank', 'noopener,noreferrer')
+    }
+    setApplyingId(job.id)
+    try {
+      await applyDirectJob(job.id, {})
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'applied' } : j))
+    } catch (err: any) {
+      alert(err.message || 'Failed to submit direct application')
+    } finally {
+      setApplyingId(null)
+    }
+  }
 
   const handleStatusChange = async (job: Job, newStatus: string) => {
     try {
@@ -124,13 +179,48 @@ export function JobDiscoveryPage() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="font-display text-2xl text-ink">Job Discovery</h2>
-            <p className="text-sm text-ink-dim mt-1">Discover and track job opportunities</p>
+            <p className="text-sm text-ink-dim mt-1">Discover, compare, and apply across multi-platform tech openings</p>
           </div>
-          <button onClick={() => setShowAdd(true)} className="press raised-sm flex items-center gap-2 px-4 py-2.5 rounded-[12px] text-[13px] font-semibold">
-            <Plus className="w-4 h-4" />
-            Add Job
+          <button onClick={() => setShowAdd(true)} className="press flex items-center gap-1 text-ink-dim hover:text-ink text-[12px] underline">
+            <Plus className="w-3.5 h-3.5" />
+            Manual Add
           </button>
         </div>
+
+        {/* Multi-Platform Automated Discovery Bar */}
+        <Card className="p-5 space-y-3 bg-ink/2 border-ink/10">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber" />
+            <span className="font-semibold text-[13px] text-ink">Automated Multi-Platform Role Scanner</span>
+            <span className="text-[11px] text-ink-dim">· Scans Greenhouse, Lever & Ashby boards</span>
+          </div>
+          <form onSubmit={handleScanDiscovery} className="flex flex-col sm:flex-row gap-3">
+            <input
+              placeholder="Target Role (e.g., Backend, Full Stack, Intern) *"
+              value={scanRole}
+              onChange={e => setScanRole(e.target.value)}
+              className="input-field flex-1"
+              required
+            />
+            <input
+              placeholder="Location (e.g. Remote, Bengaluru)"
+              value={scanLocation}
+              onChange={e => setScanLocation(e.target.value)}
+              className="input-field sm:w-56"
+            />
+            <button
+              type="submit"
+              disabled={scanning || !scanRole.trim()}
+              className="press raised-sm flex items-center justify-center gap-2 px-5 py-2.5 rounded-[12px] text-[13px] font-semibold whitespace-nowrap"
+            >
+              {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              {scanning ? 'Scanning Boards…' : 'Scan Live Openings'}
+            </button>
+          </form>
+          {scanFeedback && (
+            <p className="text-[12px] text-sage-bright pt-1 font-mono">{scanFeedback}</p>
+          )}
+        </Card>
 
         {jobs.length > 0 && (
           <div className="relative">
@@ -185,6 +275,32 @@ export function JobDiscoveryPage() {
                   >
                     {researchingId === job.id ? 'Researching…' : 'Research'}
                   </button>
+                  {job.status !== 'applied' && (
+                    <button
+                      onClick={() => handleApplyLive(job)}
+                      disabled={liveApplyingId === job.id}
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-[8px] bg-emerald-500/10 hover:bg-emerald-500/20 text-[11px] font-semibold text-emerald-600 border border-emerald-500/20 transition-colors"
+                      title="Launch visible Playwright browser on your desktop and auto-fill the application in front of you"
+                    >
+                      {liveApplyingId === job.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bot className="w-3 h-3" />}
+                      {liveApplyingId === job.id ? 'Bot Running…' : 'Apply Live (Bot)'}
+                    </button>
+                  )}
+                  {job.status !== 'applied' ? (
+                    <button
+                      onClick={() => handleApplyDirect(job)}
+                      disabled={applyingId === job.id}
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-[8px] bg-ink/5 hover:bg-ink/10 text-[11px] font-semibold text-ink"
+                      title="Direct application"
+                    >
+                      {applyingId === job.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                      {applyingId === job.id ? 'Applying…' : 'Apply Direct'}
+                    </button>
+                  ) : (
+                    <span className="shrink-0 px-2.5 py-1 rounded-[8px] bg-sage-bright/15 text-[11px] font-semibold text-sage-bright">
+                      Applied
+                    </span>
+                  )}
                   {job.url && (
                     <a href={job.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-ink-dim hover:text-ink">
                       <ExternalLink className="w-4 h-4" />

@@ -590,6 +590,15 @@ export interface JobStats {
   interviews: number
   offers: number
   recruiterOutreach: number
+  repliesReceived?: number
+  recentCompanyReplies?: Array<{
+    id: string
+    company: string
+    title: string
+    status: string
+    note: string
+    date: string
+  }>
 }
 
 export interface TimelineEvent {
@@ -732,4 +741,104 @@ export const generateCoverLetter = (jobId: string, resumeId?: string, tone?: str
   }>(`/jobs/${jobId}/personalize`, {
     method: 'POST',
     body: JSON.stringify({ resume_id: resumeId, tone }),
+  })
+
+export interface CandidateVaultItem {
+  id: string
+  category: 'policy' | 'star_story' | 'technical_deepdive' | 'custom_qa'
+  title: string
+  content: string
+  metadata?: Record<string, any>
+  created_at: string
+  updated_at: string
+}
+
+export const getCandidateVault = (category?: string) => {
+  const qs = category ? `?category=${encodeURIComponent(category)}` : ''
+  return request<{ success: boolean; vault: CandidateVaultItem[] }>(`/candidate-vault${qs}`).then(r => r.vault)
+}
+
+export const createCandidateVaultItem = (data: {
+  category: string
+  title: string
+  content: string
+  metadata?: Record<string, any>
+}) =>
+  request<{ success: boolean; item: CandidateVaultItem }>('/candidate-vault', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }).then(r => r.item)
+
+export const updateCandidateVaultItem = (id: string, data: Partial<CandidateVaultItem>) =>
+  request<{ success: boolean; item: CandidateVaultItem }>(`/candidate-vault/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  }).then(r => r.item)
+
+export const deleteCandidateVaultItem = (id: string) =>
+  request<{ success: boolean }>(`/candidate-vault/${id}`, { method: 'DELETE' })
+
+export const queryCandidateVault = (question: string) =>
+  request<{
+    success: boolean
+    matches: CandidateVaultItem[]
+    answer: string | null
+  }>('/candidate-vault/query', {
+    method: 'POST',
+    body: JSON.stringify({ question }),
+  })
+
+export const discoverJobs = (data: { role: string; location?: string; boards?: string[] }) =>
+  request<{
+    success: boolean
+    found: number
+    saved: number
+    jobs: Job[]
+  }>('/jobs/discover', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+
+export const applyDirectJob = (jobId: string, data: { resume_id?: string; cover_letter?: string; notes?: string }) =>
+  request<{
+    success: boolean
+    message: string
+    application: JobApplication
+  }>(`/jobs/${jobId}/apply-direct`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+
+export const applyLiveJob = (jobId: string) =>
+  request<{
+    success: boolean
+    message: string
+  }>(`/jobs/${jobId}/apply-live`, {
+    method: 'POST',
+  })
+
+export interface AtsResumeResult {
+  success: boolean
+  markdown: string
+  atsScore: number
+  matchedKeywords: string[]
+  suggestions: string[]
+  job: { id: string; title: string; company: string }
+  resume: { id: string; filename: string }
+  format: string
+}
+
+export const generateAtsResume = (jobId: string, resumeId?: string, format = 'faang-single-column') =>
+  request<AtsResumeResult>(`/jobs/${jobId}/generate-ats-resume`, {
+    method: 'POST',
+    body: JSON.stringify({ resume_id: resumeId, format }),
+  })
+
+export const runJobAutopilot = () =>
+  request<{
+    success: boolean
+    message: string
+    summary: { discovered: number; matched: number; applied: number; repliesChecked: number }
+  }>('/jobs/autopilot/run', {
+    method: 'POST',
   })

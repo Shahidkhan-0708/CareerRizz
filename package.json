@@ -5,6 +5,7 @@
   "main": "src/server.js",
   "type": "module",
   "scripts": {
+    "build": "cd f && npm install && npm run build",
     "start": "node src/server.js",
     "dev": "node --watch-path=src src/server.js",
     "test": "node --test",
@@ -14,6 +15,7 @@
     "node": "20.x"
   },
   "dependencies": {
+    "@composio/core": "0.14.1",
     "@napi-rs/canvas": "^1.0.6",
     "@supabase/supabase-js": "^2.48.1",
     "airtable": "^0.12.2",
@@ -30,6 +32,7 @@
     "openai": "^4.85.3",
     "pdf-parse": "^1.1.1",
     "pdfjs-dist": "^6.2.108",
+    "playwright": "^1.64.1",
     "tesseract.js": "^7.0.0",
     "uuid": "^11.0.5",
     "winston": "^3.17.0",

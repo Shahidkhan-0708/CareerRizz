@@ -5,6 +5,10 @@ import { computeCanonicalHash } from '@jobsearch/sources';
 // ---------------------------------------------------------------------------
 // These tests exercise the pure pipeline logic (normalize + expected DB calls)
 // without Redis or network. The worker entry itself needs REDIS_URL to boot.
+//
+// Direct subpath imports (@jobsearch/db/jobs.repo, /agent-runs) skip the
+// barrel index that pulls in BullMQ + ioredis, cutting cold-start from ~5.5s
+// to ~200ms on Windows NTFS.
 // ---------------------------------------------------------------------------
 
 const chain = () => {
@@ -25,10 +29,8 @@ describe('discovery pipeline logic', () => {
   });
 
   it('normalize → saveNormalizedListing upserts jobs + job_sources', async () => {
-    const { saveNormalizedListing } = await import('@jobsearch/db');
+    const { saveNormalizedListing } = await import('@jobsearch/db/jobs.repo');
     const supabase = chain();
-    // from() returns the chain; upsert().select().single() resolves listing
-    // second from('job_listings').select('created_at') — reuse chain for both
 
     const normalized = normalizeListing({
       externalId: 'gh-9',
@@ -58,7 +60,7 @@ describe('discovery pipeline logic', () => {
   });
 
   it('wrapAgentRun records success and failure rows', async () => {
-    const { wrapAgentRun } = await import('@jobsearch/db');
+    const { wrapAgentRun } = await import('@jobsearch/db/agent-runs');
     const supabase = chain();
 
     const out = await wrapAgentRun(supabase as any, { agent_type: 'discovery' }, async () => ({ ok: 1 }));

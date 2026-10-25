@@ -12,3 +12,14 @@ scripts/
 .kombai/
 OpenKombai/
 test-qa/
+.archify/
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.csv
+/index.html
+chat.py
+sih_ps26238_technical_slide.html
+college-outreach-n8n-workflow.json
+

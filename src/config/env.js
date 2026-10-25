@@ -68,6 +68,10 @@ export const config = Object.freeze({
     token: getEnv('APIFY_TOKEN', ''),
   },
 
+  composio: {
+    apiKey: getEnv('COMPOSIO_API_KEY', ''),
+  },
+
   security: {
     adminApiKey: getEnv('ADMIN_API_KEY', 'dev_admin_key_123'),
     unsubscribeJwtSecret: getEnv('UNSUBSCRIBE_JWT_SECRET', 'super_secret_unsubscribe_jwt_key'),

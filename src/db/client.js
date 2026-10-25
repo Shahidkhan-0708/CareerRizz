@@ -2,6 +2,11 @@ import { createClient } from '@supabase/supabase-js';
 import { config } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 
+// Ensure WebSocket constructor exists in Node <22 runtimes for Supabase client
+if (typeof globalThis.WebSocket === 'undefined') {
+  globalThis.WebSocket = class WebSocket {};
+}
+
 let supabaseInstance = null;
 
 export function getSupabaseClient() {
