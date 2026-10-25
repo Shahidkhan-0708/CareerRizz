@@ -23,3 +23,6 @@ chat.py
 sih_ps26238_technical_slide.html
 college-outreach-n8n-workflow.json
 
+
+.vercel
+.env*
