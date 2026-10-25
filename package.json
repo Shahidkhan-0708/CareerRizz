@@ -12,7 +12,7 @@
     "heroku-postbuild": "cd f && npm install && npm run build"
   },
   "engines": {
-    "node": "20.x"
+    "node": "24.x"
   },
   "dependencies": {
     "@composio/core": "0.14.1",
