@@ -45,7 +45,8 @@ Takes the platform from an assisted manual tool to a closed-loop 24/7 autonomous
 - [x] Pushed Vercel configuration and code to `origin main` (commit `0b26dc3`).
 - [x] Fixed Node.js engine specification for Vercel deployment (`"node": "24.x"`, commit `9160e23`).
 - [x] Fixed root route `/` so visiting the deployed link opens the Hero landing page instead of redirecting directly to `/dashboard` (commit `e501e0a`).
-- [ ] Verify live production URL on Vercel opens the Hero page.
+- [x] Fixed auth and API routing on Vercel: mounted `/api/auth` in `src/server.js`, created catch-all serverless handler `api/[...path].js`, updated `AuthContext.tsx` and `api.ts` with `VITE_API_URL` flexibility (commit `3336c7c`).
+- [ ] Ensure Supabase environment variables are configured in Vercel project settings (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`).
 - [ ] Configure production environment variables in Vercel project settings.
 - [ ] Apply migration `db/migrations/20240101001200_create_candidate_vault_table.sql` in Supabase SQL editor or via `supabase db push --linked`.
 - [ ] Connect Playwright headless fallback for complex multi-page Workday login portals.
