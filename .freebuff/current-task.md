@@ -42,7 +42,8 @@ Takes the platform from an assisted manual tool to a closed-loop 24/7 autonomous
 
 ## Blocked / next
 
-- [ ] Connect repository to Vercel (via Vercel CLI `vercel` or Vercel Dashboard GitHub import).
+- [x] Pushed Vercel configuration and code to `origin main` (commit `0b26dc3`).
+- [ ] Connect repository to Vercel via Vercel Dashboard GitHub import (https://vercel.com/new).
 - [ ] Configure production environment variables in Vercel project settings.
 - [ ] Apply migration `db/migrations/20240101001200_create_candidate_vault_table.sql` in Supabase SQL editor or via `supabase db push --linked`.
 - [ ] Connect Playwright headless fallback for complex multi-page Workday login portals.
