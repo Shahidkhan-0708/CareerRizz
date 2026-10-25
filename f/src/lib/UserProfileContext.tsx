@@ -21,6 +21,7 @@ interface UserProfileState {
 }
 
 const UserProfileContext = createContext<UserProfileState | undefined>(undefined)
+const API_BASE = ((import.meta.env.VITE_API_URL as string | undefined) || '').replace(/\/$/, '')
 
 // Default profile when backend is unreachable — default to owner access with both modules enabled.
 const DEFAULT_PROFILE: UserProfile = {
@@ -51,7 +52,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
         headers['x-bypass-auth'] = 'true'
       }
 
-      const res = await fetch('/api/user/profile', { headers })
+      const res = await fetch(`${API_BASE}/api/user/profile`, { headers })
 
       if (!res.ok) {
         // Fallback 1: try direct Supabase query
@@ -73,7 +74,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
 
         // Fallback 2: try the auth endpoint
         try {
-          const fallback = await fetch('/auth/profile', {
+          const fallback = await fetch(`${API_BASE}/api/auth/profile`, {
             headers: token ? { Authorization: `Bearer ${token}` } : {},
           })
           if (fallback.ok) {
@@ -131,7 +132,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const res = await fetch('/api/user/workspace', {
+      const res = await fetch(`${API_BASE}/api/user/workspace`, {
         method: 'PUT',
         headers,
         body: JSON.stringify({ workspace }),

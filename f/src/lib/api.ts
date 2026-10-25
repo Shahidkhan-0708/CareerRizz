@@ -7,6 +7,7 @@ import { supabase } from './supabase'
 
 const ADMIN_API_KEY = (import.meta.env.VITE_ADMIN_API_KEY as string | undefined) || ''
 const SUPABASE_CONFIGURED = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
+const API_BASE = ((import.meta.env.VITE_API_URL as string | undefined) || '').replace(/\/$/, '')
 
 export class ApiError extends Error {
   status: number
@@ -45,7 +46,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   let res: Response
   try {
-    res = await fetch(`/api${path}`, { ...options, headers })
+    res = await fetch(`${API_BASE}/api${path}`, { ...options, headers })
   } catch (err) {
     throw new ApiError(`Network error reaching the backend: ${(err as Error).message}`, 0)
   }
@@ -57,7 +58,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     delete retryHeaders['Authorization']
     delete retryHeaders['x-api-key']
     try {
-      res = await fetch(`/api${path}`, { ...options, headers: retryHeaders })
+      res = await fetch(`${API_BASE}/api${path}`, { ...options, headers: retryHeaders })
     } catch {
       // fall through to the error handler below
     }

@@ -94,6 +94,7 @@ app.get('/health', (req, res) => {
 // Auth Routes (signup, login, session)
 // ----------------------------------------------------
 app.use('/auth', authRouter);
+app.use('/api/auth', authRouter);
 
 // ----------------------------------------------------
 // Gmail OAuth 2.0 Flow & Test Endpoints
