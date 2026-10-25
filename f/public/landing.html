@@ -1172,6 +1172,21 @@
     }, { passive: true });
   }
 
+  // Ensure application links navigate the top window seamlessly
+  document.addEventListener('click', function(e) {
+    const a = e.target.closest('a');
+    if (!a) return;
+    const href = a.getAttribute('href');
+    if (href && (href.startsWith('/login') || href.startsWith('/signup') || href.startsWith('/dashboard'))) {
+      e.preventDefault();
+      if (window.top) {
+        window.top.location.href = href;
+      } else {
+        window.location.href = href;
+      }
+    }
+  });
+
 })();
 </script>
 

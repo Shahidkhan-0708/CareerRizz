@@ -8,6 +8,7 @@ import { ModuleGuard } from '@/components/ModuleGuard'
 import { PageTransition } from '@/components/PageTransition'
 import LoginPage from '@/pages/LoginPage'
 import SignupPage from '@/pages/SignupPage'
+import LandingPage from '@/pages/LandingPage'
 
 // Route-level code splitting: each page loads in its own chunk so the initial
 // bundle stays small and only what's visited is downloaded.
@@ -91,9 +92,9 @@ function App() {
       <Route path="/jobs/tracking" element={<AuthGuard><UserProfileProvider><AppShell><AnimatedPage><Suspense fallback={<LoadingState label="Loading…" />}><ModuleGuard module="job_search"><JobTrackingPage /></ModuleGuard></Suspense></AnimatedPage></AppShell></UserProfileProvider></AuthGuard>} />
       <Route path="/jobs/vault" element={<AuthGuard><UserProfileProvider><AppShell><AnimatedPage><Suspense fallback={<LoadingState label="Loading…" />}><ModuleGuard module="job_search"><CandidateVaultPage /></ModuleGuard></Suspense></AnimatedPage></AppShell></UserProfileProvider></AuthGuard>} />
 
-      {/* Root redirects to dashboard (which will redirect to /login if not authed) */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      {/* Root renders the marketing Hero landing page */}
+      <Route path="/" element={<LandingPage />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }
