@@ -43,7 +43,9 @@ Takes the platform from an assisted manual tool to a closed-loop 24/7 autonomous
 ## Blocked / next
 
 - [x] Pushed Vercel configuration and code to `origin main` (commit `0b26dc3`).
-- [ ] Connect repository to Vercel via Vercel Dashboard GitHub import (https://vercel.com/new).
+- [x] Fixed Node.js engine specification for Vercel deployment (`"node": "24.x"`, commit `9160e23`).
+- [x] Fixed root route `/` so visiting the deployed link opens the Hero landing page instead of redirecting directly to `/dashboard` (commit `e501e0a`).
+- [ ] Verify live production URL on Vercel opens the Hero page.
 - [ ] Configure production environment variables in Vercel project settings.
 - [ ] Apply migration `db/migrations/20240101001200_create_candidate_vault_table.sql` in Supabase SQL editor or via `supabase db push --linked`.
 - [ ] Connect Playwright headless fallback for complex multi-page Workday login portals.
